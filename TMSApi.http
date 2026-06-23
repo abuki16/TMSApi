@@ -1,0 +1,212 @@
+@TMSApi_HostAddress = http://localhost:5049
+
+### Test Anonymous Access to Assessments
+GET {{TMSApi_HostAddress}}/api/assessments/results
+Accept: application/json
+
+###
+
+GET {{TMSApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+
+GET {{TMSApi_HostAddress}}/api/assessments/results/
+Accept: application/json
+
+###
+
+GET {{TMSApi_HostAddress}}/api/assessments/results1/
+X-Training-User: abuki
+Accept: application/json
+
+###
+
+GET {{TMSApi_HostAddress}}/api/enrollments/worker-smoke/
+Accept: application/json
+
+
+### =============================
+### Module 4 Session 3 Endpoints
+### =============================
+
+GET {{TMSApi_HostAddress}}/payment-options/
+Accept: application/json
+
+
+### 
+### Module 4 Session 3 Endpoints
+### ==============================
+
+// 1. GET all enrollments 
+GET {{TMSApi_HostAddress}}/api/enrollments
+Accept: application/json
+
+###
+
+### 2. POST a new enrollment
+# @name createEnrollment
+POST {{TMSApi_HostAddress}}/api/enrollments
+Content-Type: application/json
+
+{
+  "studentId": "S-001",
+  "courseCode": "CS-101"
+}
+
+###
+
+### 3. GET a specific enrollment 
+# This variable dynamically extracts the generated dynamic ID from your POST response object
+@enrollmentId = {{createEnrollment.response.body.id}}
+
+GET {{TMSApi_HostAddress}}/api/enrollments/{{enrollmentId}}
+Accept: application/json
+
+###
+
+### 4. DELETE an enrollment 
+DELETE {{TMSApi_HostAddress}}/api/enrollments/{{enrollmentId}}
+
+###
+
+### 5. Test ProblemDetails Fault Envelope 
+GET {{TMSApi_HostAddress}}/api/error
+Accept: application/json
+
+### 6. Test ProblemDetails Fault Envelope (Exercise 6)
+GET http://localhost:5049/api/error
+Accept: application/json
+
+
+### 7. Test OpenAPI Endpoint
+GET {{TMSApi_HostAddress}}/openapi/v1.json
+Accept: application/json
+
+
+
+### ==========================
+### CRUD Endpoints  For STUDENT 
+### ==========================
+
+### 1. GET All Students (Should be empty initially)
+GET {{TMSApi_HostAddress}}/api/students
+Accept: application/json
+
+###
+
+
+### 2. POST / Create a New Student
+# @name createStudent
+POST {{TMSApi_HostAddress}}/api/students
+Content-Type: application/json
+
+{
+  "id": "10",
+  "name": "abuki",
+  "age": 22,
+  "gpa": 3.8
+}
+
+###
+
+### 3. GET Student by ID
+GET {{TMSApi_HostAddress}}/api/students/10
+Accept: application/json
+
+###
+
+### 4. PUT / Update Student Details
+PUT {{TMSApi_HostAddress}}/api/students/10
+Content-Type: application/json
+
+{
+  "name": "Abuki Modified",
+  "age": 23,
+  "gpa": 3.9
+}
+
+###
+
+### 5. Test Student Age Out of Range Exception (Should return 400 Bad Request)
+POST {{TMSApi_HostAddress}}/api/students
+Content-Type: application/json
+
+{
+  "id": "S-002",
+  "name": "Invalid Student",
+  "age": 12,
+  "gpa": 3.5
+}
+
+
+### ======================
+### Course CRUD Endpoints
+### ======================
+
+### 1. GET All Courses
+GET {{TMSApi_HostAddress}}/api/courses
+Accept: application/json
+
+###
+
+### 2. POST / Create a New Course
+# @name createCourse
+POST {{TMSApi_HostAddress}}/api/courses
+Content-Type: application/json
+
+{
+  "code": "CS-101",
+  "title": "Introduction to Computer Science",
+  "capacity": 30
+}
+
+###
+
+### 3. GET Course by Code
+GET {{TMSApi_HostAddress}}/api/courses/CS-101
+Accept: application/json
+
+###
+
+### 4. PUT / Update Course Capacity
+PUT {{TMSApi_HostAddress}}/api/courses/CS-101
+Content-Type: application/json
+
+{
+  "title": "Advanced Computer Science",
+  "capacity": 45
+}
+
+###
+
+### 5. DELETE a Student
+DELETE {{TMSApi_HostAddress}}/api/students/10
+
+###
+//  Deferred Execution Experiment (Step 3)
+GET {{TMSApi_HostAddress}}/api/test/deferred
+Accept: application/json
+
+###
+
+// Translation Failure 
+GET {{TMSApi_HostAddress}}/api/test/translation-fail
+Accept: application/json
+
+
+
+
+
+### 1. Test Paginated Students Roster - Exercise 3 
+# This hits stable-sorted, 20-row database window
+GET {{TMSApi_HostAddress}}/api/students/paged?pageNumber=1
+Accept: application/json
+
+###
+
+### 2. Test Top 5 Courses Aggregates 
+//This hits  GroupBy aggregate query executed on the DB engine
+
+GET {{TMSApi_HostAddress}}/api/students/top-courses
+Accept: application/json
