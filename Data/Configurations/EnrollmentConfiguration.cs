@@ -21,5 +21,8 @@ public class EnrollmentConfiguration : IEntityTypeConfiguration<Enrollment>
             .WithMany(c => c.Enrollments)
             .HasForeignKey(e => e.CourseId)
             .OnDelete(DeleteBehavior.Restrict);
+   //  global query filter so archived items stay hidden from ordinary queries by default
+            builder.HasQueryFilter(e => !e.IsArchived);
     }
+    
 }

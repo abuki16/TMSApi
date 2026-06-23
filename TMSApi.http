@@ -210,3 +210,36 @@ Accept: application/json
 
 GET {{TMSApi_HostAddress}}/api/students/top-courses
 Accept: application/json
+
+###
+// Exercise 7 A: Test the Intentional N+1 Trap Route
+
+GET {{TMSApi_HostAddress}}/api/reports/nplusone-trap
+Accept: application/json
+
+###
+
+// Exercise 7  B: Test the High-Performance Fixed Route
+GET {{TMSApi_HostAddress}}/api/reports/nplusone-fixed
+Accept: application/json
+
+###
+
+
+ //Exercise 8: Test Concurrency Safety Exception
+
+POST {{TMSApi_HostAddress}}/api/students/test-concurrency
+Content-Type: application/json
+
+###
+
+// Exercise 9 A: Execute High-Performance Bulk Archival
+POST {{TMSApi_HostAddress}}/api/enrollments/bulk-archive
+Content-Type: application/json
+
+###
+
+// Exercise 9 B: Read All Students Including Soft-Deleted Rows
+GET {{TMSApi_HostAddress}}/api/students/all-with-deleted
+Accept: application/json
+

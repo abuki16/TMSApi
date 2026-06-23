@@ -1,5 +1,4 @@
 using TmsApi.Services;
-//using TmsApi.Configuration;
 using Microsoft.AspNetCore.Authentication;
 using Scalar.AspNetCore;
 using TmsApi.Worker;
@@ -19,6 +18,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 
 // Keep this service Scoped to avoid ValidateScopes startup exceptions
+
 //builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 //builder.Services.AddSingleton<EnrollmentWorker>();
 
@@ -146,6 +146,127 @@ app.MapGet("/payment-options", () =>
         new { Method = "CreditCard", Description = "Pay securely with Visa/Mastercard" },
         new { Method = "PayPal", Description = "Use your PayPal account" },
         new { Method = "BankTransfer", Description = "Direct transfer from your bank" }
+    });
+});
+// Exercise 3: Test Paginated Students Roster
+app.MapGet("/api/students/paged", async (TmsDbContext db, int pageNumber = 1, CancellationToken cancellationToken = default) =>
+{
+    // Strict pagination window constraints as expressed in the module
+    int pageSize = 20;
+    if (pageNumber < 1) pageNumber = 1;
+
+    var pagedStudents = await db.Students
+        .AsNoTracking()
+        .OrderBy(s => s.Id)
+        .Skip((pageNumber - 1) * pageSize)
+        .Take(pageSize)
+        .ToListAsync(cancellationToken);
+
+    return Results.Ok(pagedStudents);
+});
+
+// Exercise 7 B  Intentional N+1 Problem for Learning
+app.MapGet("/api/reports/nplusone-trap", async (TmsDbContext db, CancellationToken cancellationToken) =>
+{
+    // 1. Fires 1 initial query to get all active, non-deleted students
+    var students = await db.Students.AsNoTracking().ToListAsync(cancellationToken);
+
+    foreach (var s in students)
+    {
+        // 2. Fires an extra query back to PostgreSQL for EACH individual student in the loop
+        var count = await db.Enrollments
+            .AsNoTracking()
+            .CountAsync(e => e.StudentId == s.Id, cancellationToken);
+
+        Console.WriteLine($"[N+1 Loop Log] {s.Name}: {count} enrollments");
+    }
+
+    return Results.Ok(new { Message = "Check your IDE terminal log to see the 1 + N SQL statements fired!" });
+});
+
+// Exercise 7B: Fixed with a Single Shaped Query
+app.MapGet("/api/reports/nplusone-fixed", async (TmsDbContext db, CancellationToken cancellationToken) =>
+{
+    // Fix: Single query with projection using a SQL subquery join
+    var report = await db.Students
+        .AsNoTracking()
+        .Select(s => new
+        {
+            s.Name,
+            EnrollmentCount = s.Enrollments.Count
+        })
+        .ToListAsync(cancellationToken);
+
+    foreach (var r in report)
+    {
+        Console.WriteLine($"[Fixed Log] {r.Name}: {r.EnrollmentCount} enrollments");
+    }
+
+    return Results.Ok(report);
+});
+
+// Exercise 8: Simulating a Concurrency Conflict (GUARANTEED CONFLICT EXCEPTION)
+app.MapPost("/api/students/test-concurrency", async (TmsDbContext db) =>
+{
+    // 1. Load the student records
+    var studentClerkA = await db.Students.FirstOrDefaultAsync();
+    if (studentClerkA == null) return Results.NotFound("No students found to test with.");
+    
+    var studentClerkB = await db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == studentClerkA.Id);
+    if (studentClerkB == null) return Results.NotFound("Clerk B record could not be loaded.");
+
+    // 2. Clerk A updates the student's name and saves successfully
+    studentClerkA.Name = "Updated By Clerk A";
+    await db.SaveChangesAsync(); // This increments the real xmin version token in PostgreSQL!
+
+    // Clear the tracker so EF Core forgets about Clerk A's instance in memory
+    db.ChangeTracker.Clear();
+
+    // 3. Clerk B tries to update using their old state
+    try
+    {
+        studentClerkB.Name = "Updated By Clerk B";
+        
+        // 🔥 FORCE DISCREPANCY: Manually set an obsolete Version token so PostgreSQL's xmin check fails immediately
+        studentClerkB.Version = 0; 
+
+        db.Students.Update(studentClerkB); 
+        await db.SaveChangesAsync(); // This will now definitively throw the DbUpdateConcurrencyException!
+        
+        return Results.Ok("Save succeeded unexpectedly.");
+    }
+    catch (DbUpdateConcurrencyException ex)
+    {
+        Console.WriteLine($"[Concurrency Conflict Caught Successfully!] {ex.Message}");
+        return Results.Conflict(new { Message = "Concurrency exception caught successfully! Your data is safe.", Error = ex.GetType().Name });
+    }
+});
+
+// Exercise 9A: High-Performance Bulk Archive via ExecuteUpdateAsync
+app.MapPost("/api/enrollments/bulk-archive", async (TmsDbContext db) =>
+{
+    // Ex 9A High performance: Generates a single SQL UPDATE statement directly on the database server
+    int affectedRows = await db.Enrollments
+        .Where(e => e.Grade != null && e.Grade < 2.0m) 
+        .ExecuteUpdateAsync(setter => setter.SetProperty(e => e.IsArchived, true));
+
+    return Results.Ok(new { Message = "Bulk archival complete!", RowsAffected = affectedRows });
+});
+
+// Exercise 9B: Demonstration of Bypassing Global Filters with IgnoreQueryFilters()
+app.MapGet("/api/students/all-with-deleted", async (TmsDbContext db) =>
+{
+    // Normal query (hides soft-deleted students)
+    var activeCount = await db.Students.CountAsync();
+
+    // Overridden query (bypasses HasQueryFilter to retrieve everything)
+    var totalCountWithDeleted = await db.Students
+        .IgnoreQueryFilters()
+        .CountAsync();
+
+    return Results.Ok(new {
+        ActiveStudentsCount = activeCount,
+        TotalIncludingSoftDeleted = totalCountWithDeleted
     });
 });
 
