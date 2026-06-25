@@ -180,6 +180,7 @@ Content-Type: application/json
 
 ###
 
+
 ### 5. DELETE a Student
 DELETE {{TMSApi_HostAddress}}/api/students/10
 
@@ -196,11 +197,9 @@ Accept: application/json
 
 
 
-
-
 ### 1. Test Paginated Students Roster - Exercise 3 
-# This hits stable-sorted, 20-row database window
-GET {{TMSApi_HostAddress}}/api/students/paged?pageNumber=1
+// This hits stable-sorted, 20-row database window
+GET {{TMSApi_HostAddress}}/api/students/search-paged
 Accept: application/json
 
 ###
@@ -214,17 +213,10 @@ Accept: application/json
 ###
 // Exercise 7 A: Test the Intentional N+1 Trap Route
 
-GET {{TMSApi_HostAddress}}/api/reports/nplusone-trap
+GET {{TMSApi_HostAddress}}/api/students/test-n-plus-one
 Accept: application/json
 
 ###
-
-// Exercise 7  B: Test the High-Performance Fixed Route
-GET {{TMSApi_HostAddress}}/api/reports/nplusone-fixed
-Accept: application/json
-
-###
-
 
  //Exercise 8: Test Concurrency Safety Exception
 
@@ -233,13 +225,20 @@ Content-Type: application/json
 
 ###
 
-// Exercise 9 A: Execute High-Performance Bulk Archival
-POST {{TMSApi_HostAddress}}/api/enrollments/bulk-archive
+
+//exercise 9.1
+POST {{TMSApi_HostAddress}}/api/students
 Content-Type: application/json
+
+// Exercise 9.2A: Admin Route to see ALL students including soft-deleted ones
+
+GET {{TMSApi_HostAddress}}/admin/all-students
+Accept: application/json
 
 ###
 
-// Exercise 9 B: Read All Students Including Soft-Deleted Rows
-GET {{TMSApi_HostAddress}}/api/students/all-with-deleted
-Accept: application/json
+
+// Exercise 9.2B: Execute High-Performance Bulk Archival
+POST {{TMSApi_HostAddress}}/api/enrollments/bulk-archive
+Content-Type: application/json
 

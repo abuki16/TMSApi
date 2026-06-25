@@ -10,7 +10,7 @@ public class EnrollmentConfiguration : IEntityTypeConfiguration<Enrollment>
     {
         builder.HasKey(e => e.Id);
 
-        // Configure Student relationship
+        // Configure FKs Student relationship
         builder.HasOne(e => e.Student)
             .WithMany(s => s.Enrollments)
             .HasForeignKey(e => e.StudentId)
@@ -23,6 +23,11 @@ public class EnrollmentConfiguration : IEntityTypeConfiguration<Enrollment>
             .OnDelete(DeleteBehavior.Restrict);
    //  global query filter so archived items stay hidden from ordinary queries by default
             builder.HasQueryFilter(e => !e.IsArchived);
+
+//Configure tracking properties requested by the graph rules
+            builder.Property(e => e.Grade)
+            .HasMaxLength(2); // Accommodates values like "A+", "B"...
+
     }
     
 }

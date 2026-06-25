@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TmsApi.Data;
@@ -11,9 +12,11 @@ using TmsApi.Data;
 namespace TMSApi.Migrations
 {
     [DbContext(typeof(TmsDbContext))]
-    partial class TmsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260625003629_RefineTmsModel")]
+    partial class RefineTmsModel
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -97,7 +100,8 @@ namespace TMSApi.Migrations
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
 
                     b.HasKey("Id");
 
@@ -119,6 +123,7 @@ namespace TMSApi.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal?>("Grade")
+                        .HasMaxLength(2)
                         .HasColumnType("numeric");
 
                     b.Property<bool>("IsArchived")
@@ -161,11 +166,13 @@ namespace TMSApi.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("RegistrationNumber")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<uint>("Version")
                         .IsConcurrencyToken()
@@ -213,7 +220,7 @@ namespace TMSApi.Migrations
                     b.HasOne("TmsApi.Entities.Course", "Course")
                         .WithMany("Enrollments")
                         .HasForeignKey("CourseId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("TmsApi.Entities.Student", "Student")

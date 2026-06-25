@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 namespace TmsApi.Entities;
 public class Student
 {
@@ -10,6 +11,8 @@ public decimal GPA { get; set; }
 public bool IsActive { get; set; } = true;
 
 public bool IsDeleted { get; set; } = false;
+
+//[NotMapped]
 public uint Version { get; set; }
 
 // Navigation property for many-to-many relationship

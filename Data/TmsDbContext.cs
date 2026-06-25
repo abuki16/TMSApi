@@ -15,9 +15,13 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        // Exercise 4 Task 3: Scan and apply all IEntityTypeConfiguration classes automatically
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(TmsDbContext).Assembly);
-    }
+        modelBuilder.Entity<Student>().Property<DateTime>("LastUpdated");
+        // Tell EF Core to map Version to PostgreSQL's system xmin column
+        modelBuilder.Entity<Student>().Property(s => s.Version).IsRowVersion();
+        // Exercise 9 Task 1: Global Query Filter for Soft Delete
+    modelBuilder.Entity<Student>().HasQueryFilter(s => !s.IsDeleted);
+}
+    
     
 
 

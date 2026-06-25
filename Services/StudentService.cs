@@ -116,31 +116,30 @@ public class StudentService(TmsDbContext dbContext, ILogger<StudentService> logg
 
     // Exercise 3 Task 1 Implementation
     public async Task<IReadOnlyList<Student>> GetPagedStudentsAsync(int pageNumber, CancellationToken cancellationToken)
-    {
-        const int pageSize = 20; 
-        if (pageNumber < 1) pageNumber = 1;
-        int itemsToSkip = (pageNumber - 1) * pageSize;
+{
+    const int pageSize = 20; 
+    if (pageNumber < 1) pageNumber = 1;
+    int itemsToSkip = (pageNumber - 1) * pageSize;
 
-        var dbList = await dbContext.Students
-            .OrderBy(s => s.Name) 
-            .Skip(itemsToSkip)
-            .Take(pageSize)
-            .ToListAsync(cancellationToken); 
+    return await dbContext.Students
+        .OrderBy(s => s.Name) 
+        .ThenBy(s => s.Id) // Guarantees a stable sort if names match
+        .Skip(itemsToSkip)
+        .Take(pageSize)
+        .ToListAsync(cancellationToken); 
+}
 
-        return dbList.Select(s => new Student
-        {
-            Id = s.Id,
-            Name = s.Name,
-            RegistrationNumber = s.RegistrationNumber,
-            Age = 20,
-            GPA = s.GPA
-        }).ToList();
-    }
+    //     return dbList.Select(s => new Student
+    //     {
+    //         Id = s.Id,
+    //         Name = s.Name,
+    //         RegistrationNumber = s.RegistrationNumber,
+    //         Age = 20,
+    //         GPA = s.GPA
+    //     }).ToList();
+    // }
 
-    // Exercise 3 Task 2 Implementation
-    // Exercise 3 Task 2 Implementation
-  // Exercise 3 Task 2 Implementation
-    // Exercise 3 Task 2 Alternative Implementation
+  
     // Exercise 3 Task 2 Implementation
     public async Task<IReadOnlyList<TopCourseSummary>> GetTopCoursesAsync(CancellationToken cancellationToken)
     {
