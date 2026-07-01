@@ -1,117 +1,42 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using TmsApi.Data;
+using Tms.Api.Dtos;
 using TmsApi.Entities;
+
 
 namespace TmsApi.Services;
 
-public interface ICourseService
+public class CourseService(TmsDbContext context, ILogger<CourseService> logger) : ICourseService
 {
-    Task<Course> CreateAsync(Course course);
-    Task<Course?> GetByIdAsync(string code);
-    Task<IReadOnlyList<Course>> GetAllAsync();
-    Task<Course?> UpdateAsync(string code, string title, int capacity);
-    Task<bool> DeleteAsync(string code);
-}
+    public Task<CourseResponseDto?> GetByIdAsync(int id, CancellationToken ct) =>
+        context.Courses
+            .AsNoTracking()
+            .Where(c => c.Id == id)
+            .Select(c => new CourseResponseDto(
+                c.Id, 
+                c.Code, 
+                c.Title, 
+                c.MaxCapacity, 
+                c.Enrollments.Count)) // EF translates this directly into a high-performance SQL COUNT(*) subquery
+            .FirstOrDefaultAsync(ct);
 
-public class CourseService(TmsDbContext dbContext, ILogger<CourseService> logger) : ICourseService
-{
-    public async Task<Course> CreateAsync(Course course)
+    public async Task<CourseResponseDto> CreateAsync(CreateCourseRequest request, CancellationToken ct)
     {
-        var exists = await dbContext.Courses.AnyAsync(c => c.Code == course.Code);
-        if (exists)
+        var course = new Course
         {
-            logger.LogWarning("Create failed: Course with code {CourseCode} already exists.", course.Code);
-            throw new InvalidOperationException($"Course with code {course.Code} already exists.");
-        }
-
-        // Map Controller model data to Entity database shape
-        var dbCourse = new Course
-        {
-            Code = course.Code,
-            Title = course.Title,
-            Capacity = course.Capacity
-            // PostgreSQL automatically generates and tracks the internal surrogate key 'Id' here
+            Code = request.Code,
+            Title = request.Title,
+            MaxCapacity = request.MaxCapacity
         };
 
-        await dbContext.Courses.AddAsync(dbCourse);
-        await dbContext.SaveChangesAsync();
-
-        logger.LogInformation("Successfully created course: {CourseCode}", course.Code);
-        return course;
-    }
-
-    public async Task<Course?> GetByIdAsync(string code)
-    {
-        var c = await dbContext.Courses.FirstOrDefaultAsync(c => c.Code == code);
-        if (c == null) return null;
-
-        // Map back to Controller Model type exactly like StudentService
-        return new Course 
-        { 
-            Code = c.Code, 
-            Title = c.Title, 
-            Capacity = c.Capacity 
-        };
-    }
-
-    public async Task<IReadOnlyList<Course>> GetAllAsync()
-    {
-        var dbList = await dbContext.Courses.ToListAsync();
+        context.Courses.Add(course);
+        await context.SaveChangesAsync(ct);
         
-        // Map list database entities back to interface collection definitions
-        return dbList.Select(c => new Course 
-        { 
-            Code = c.Code, 
-            Title = c.Title, 
-            Capacity = c.Capacity 
-        }).ToList();
+        logger.LogInformation("Created course {CourseId} ({Code})", course.Id, course.Code);
+
+        // Re-query through GetByIdAsync to enforce the exact same flat projection layer across all read/write bounds
+        return (await GetByIdAsync(course.Id, ct))!;
     }
-
-    public async Task<Course?> UpdateAsync(string code, string title, int capacity)
-    {
-        var course = await dbContext.Courses.FirstOrDefaultAsync(c => c.Code == code);
-        if (course == null)
-        {
-            logger.LogWarning("Update failed: Course {CourseCode} not found.", code);
-            return null;
-        }
-
-        try
-        {
-            course.Title = title;
-            course.Capacity = capacity;
-
-            await dbContext.SaveChangesAsync();
-
-            logger.LogInformation("Successfully updated course: {CourseCode}", code);
-            return new  Course 
-            { 
-                Code = course.Code, 
-                Title = course.Title, 
-                Capacity = course.Capacity 
-            };
-        }
-        catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
-        {
-            logger.LogError(ex, "Validation error updating course {CourseCode}.", code);
-            throw;
-        }
-    }
-
-    public async Task<bool> DeleteAsync(string code)
-    {
-        var course = await dbContext.Courses.FirstOrDefaultAsync(c => c.Code == code);
-        if (course == null) return false;
-
-        dbContext.Courses.Remove(course);
-        await dbContext.SaveChangesAsync();
-
-        logger.LogInformation("Deleted course record: {CourseCode}", code);
-        return true;
-    }
+    public Task<bool> CodeExistsAsync(string code, CancellationToken ct) =>
+context.Courses.AsNoTracking().AnyAsync(c => c.Code == code, ct);
 }

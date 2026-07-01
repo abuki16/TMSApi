@@ -1,75 +1,47 @@
-using System;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using TmsApi.Services;
-using TmsApi.Data;
 using TmsApi.Entities;
-
+using TmsApi.Services;
+using Tms.Api.Dtos;
 namespace TmsApi.Controllers;
-
-public record CreateCourseRequest(string Code, string Title, int Capacity);
-public record UpdateCourseRequest(string Title, int Capacity);
 
 [ApiController]
 [Route("api/courses")]
 public class CoursesController(ICourseService courseService) : ControllerBase
 {
-    [HttpGet]
-    public async Task<IActionResult> GetAll()
+    [HttpGet("{id:int}", Name = nameof(GetCourseById))]
+    public async Task<IActionResult> GetCourseById(int id, CancellationToken ct)
     {
-        var courses = await courseService.GetAllAsync();
-        return Ok(courses);
+        var course = await courseService.GetByIdAsync(id, ct);
+        
+        if (course is null)
+        {
+            return NotFound();
+        }
+        
+        return Ok(course);
     }
 
-    [HttpGet("{code}")]
-    public async Task<IActionResult> GetById(string code)
+     [HttpPost]
+// public async Task<IActionResult> CreateCourse(CreateCourseRequest request, CancellationToken ct) // Change from 'Course course' to 'CreateCourseRequest request'
+// {
+//     var result = await courseService.CreateAsync(request, ct); // Pass request here
+//     return CreatedAtAction(nameof(GetCourseById), new { id = result.Id }, result);
+// }
+public async Task<IActionResult> CreateCourse(CreateCourseRequest request, CancellationToken ct)
+{
+    // Pre-check business rule: Ensure course code uniqueness before inserting
+    if (await courseService.CodeExistsAsync(request.Code, ct))
     {
-        var course = await courseService.GetByIdAsync(code);
-        return course is not null ? Ok(course) : NotFound();
+        return Conflict(new ProblemDetails
+        {
+            Title = "Course code already exists",
+            Detail = $"A course with code '{request.Code}' is already registered.",
+            Status = StatusCodes.Status409Conflict,
+            Type = "https://tools.ietf.org/html/rfc9110#section-15.5.10"
+        });
     }
 
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateCourseRequest request)
-    {
-        try
-        {
-            var course = new Course 
-            { 
-                Code = request.Code, 
-                Title = request.Title, 
-                Capacity = request.Capacity 
-            };
-            var result = await courseService.CreateAsync(course);
-            return CreatedAtAction(nameof(GetById), new { code = result.Code }, result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(new { message = ex.Message });
-        }
-        catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
-    }
-
-    [HttpPut("{code}")]
-    public async Task<IActionResult> Update(string code, [FromBody] UpdateCourseRequest request)
-    {
-        try
-        {
-            var updated = await courseService.UpdateAsync(code, request.Title, request.Capacity);
-            return updated is not null ? Ok(updated) : NotFound();
-        }
-        catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
-    }
-
-    [HttpDelete("{code}")]
-    public async Task<IActionResult> Delete(string code)
-    {
-        var deleted = await courseService.DeleteAsync(code);
-        return deleted ? NoContent() : NotFound();
-    }
+    var result = await courseService.CreateAsync(request, ct);
+    return CreatedAtAction(nameof(GetCourseById), new { id = result.Id }, result);
+}
 }

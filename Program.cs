@@ -6,6 +6,7 @@ using TmsApi.Options;
 using Microsoft.EntityFrameworkCore;
 using TmsApi.Data;
 using TmsApi.Entities;
+
 var builder = WebApplication.CreateBuilder(args);
 
 
@@ -72,24 +73,20 @@ Console.WriteLine("Payments:MaxDepositBirr = " +
 
 var app = builder.Build();
 
+// 1. GLOBAL ERROR HANDLING (Runs in both Development and Production)
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 
+app.UseMiddleware<RequestLoggingMiddleware>();
 // Exercise 7: 
 if (app.Environment.IsDevelopment())
 {
     // OpenAPI document
     app.MapOpenApi();
-
     // Interactive API explorer
     app.MapScalarApiReference();
 }
-else
-{
-    // Production: don't expose stack traces
-    app.UseExceptionHandler();
-}
 
-app.UseStatusCodePages();
-app.UseMiddleware<RequestLoggingMiddleware>();
 
 // 2. CONFIGURE PIPELINE MIDDLEWARE (ORDER MATTERS)
 
@@ -295,10 +292,10 @@ using (var scope = app.Services.CreateScope())
         // 2. Seed Courses using explicit Database Entities matching your CourseService tracking
         var courses = new List<TmsApi.Entities.Course>
         {
-            new() { Code = "CS-101", Title = "Introduction to Computer Science", Capacity = 30 },
-            new() { Code = "CS-201", Title = "Data Structures and Algorithms", Capacity = 25 },
-            new() { Code = "MAT-101", Title = "Calculus I", Capacity = 40 },
-            new() { Code = "c#-01",Title = "C# Fundamental",Capacity =30}
+            new() { Code = "CS-101", Title = "Introduction to Computer Science", MaxCapacity = 30 },
+            new() { Code = "CS-201", Title = "Data Structures and Algorithms", MaxCapacity = 25 },
+            new() { Code = "MAT-101", Title = "Calculus I", MaxCapacity = 40 },
+            new() { Code = "c#-01",Title = "C# Fundamental",MaxCapacity =30}
         };
         context.Courses.AddRange(courses);
         context.SaveChanges(); // Persist to database so PostgreSQL populates primary key IDs
