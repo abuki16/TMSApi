@@ -27,7 +27,7 @@ public class EnrollmentsController(
             return NotFound();
         }
 
-        // 2. Check capacity limits next. If full, return 409 Conflict with ProblemDetails body.
+        // 2. Check capacity limits next. If full, return 409 Conflict with Problem details body
         if (course.EnrollmentCount >= course.MaxCapacity)
         {
             return Conflict(new ProblemDetails

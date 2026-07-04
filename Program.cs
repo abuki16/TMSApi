@@ -6,12 +6,20 @@ using TmsApi.Options;
 using Microsoft.EntityFrameworkCore;
 using TmsApi.Data;
 using TmsApi.Entities;
+using Tms.Api.Filters;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
 
-// 1. REGISTER SERVICES
+// Registering  AuditLogFilter for all Controllers 
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<AuditLogFilter>();
+});
+ 
 builder.Services.AddControllers();
+
 
 // Exercise 6: Register the ProblemDetails service framework
 builder.Services.AddProblemDetails(); 
@@ -86,7 +94,12 @@ if (app.Environment.IsDevelopment())
     // Interactive API explorer
     app.MapScalarApiReference();
 }
-
+if (app.Environment.IsDevelopment())
+{
+using var scope = app.Services.CreateScope();
+var context = scope.ServiceProvider.GetRequiredService<TmsDbContext>();
+await DataSeeder.SeedAsync(context);
+}
 
 // 2. CONFIGURE PIPELINE MIDDLEWARE (ORDER MATTERS)
 
