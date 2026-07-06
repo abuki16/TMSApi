@@ -6,19 +6,18 @@ using TmsApi.Options;
 using Microsoft.EntityFrameworkCore;
 using TmsApi.Data;
 using TmsApi.Entities;
-using Tms.Api.Filters;
-
+using Microsoft.AspNetCore.Mvc;
+using TmsApi.Filters;
+  
 
 var builder = WebApplication.CreateBuilder(args);
 
 
-// Registering  AuditLogFilter for all Controllers 
+// 1. REGISTER SERVICES
 builder.Services.AddControllers(options =>
 {
-    options.Filters.Add<AuditLogFilter>();
+options.Filters.Add<AuditLogFilter>();
 });
- 
-builder.Services.AddControllers();
 
 
 // Exercise 6: Register the ProblemDetails service framework
@@ -40,7 +39,7 @@ builder.Services.AddScoped<ICourseService, CourseService>();
 builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 
 // If EnrollmentWorker is a BackgroundService, leave it as Singleton or change it to Transient
-builder.Services.AddTransient<EnrollmentWorker>();
+builder.Services.AddSingleton<EnrollmentWorker>();
 
 
 // Register TmsDbContext scoped for incoming HTTP requests
@@ -81,19 +80,18 @@ Console.WriteLine("Payments:MaxDepositBirr = " +
 
 var app = builder.Build();
 
+app.UseMiddleware<RequestLoggingMiddleware>();
+
 // 1. GLOBAL ERROR HANDLING (Runs in both Development and Production)
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
-app.UseMiddleware<RequestLoggingMiddleware>();
-// Exercise 7: 
-if (app.Environment.IsDevelopment())
-{
-    // OpenAPI document
-    app.MapOpenApi();
-    // Interactive API explorer
-    app.MapScalarApiReference();
-}
+// 2. CONFIGURE PIPELINE MIDDLEWARE (ORDER MATTERS)
+
+app.UseHttpsRedirection();
+
+
+
 if (app.Environment.IsDevelopment())
 {
 using var scope = app.Services.CreateScope();
@@ -101,9 +99,6 @@ var context = scope.ServiceProvider.GetRequiredService<TmsDbContext>();
 await DataSeeder.SeedAsync(context);
 }
 
-// 2. CONFIGURE PIPELINE MIDDLEWARE (ORDER MATTERS)
-
-app.UseHttpsRedirection();
 
 // Step 1: Routing must happen first so the app matches the URL to an endpoint
 app.UseRouting();
@@ -113,6 +108,18 @@ app.UseAuthentication();
 
 // Step 3: Authorization checks IF you have permission to access the matched route
 app.UseAuthorization();
+
+
+// Exercise 7: 
+if (app.Environment.IsDevelopment())
+{
+    // OpenAPI document
+    app.MapOpenApi();
+    // Interactive API explorer
+    app.MapScalarApiReference();
+}
+
+app.MapControllers();
 
 // Exercise 6: Test error route that intentionally throws a database exception
 app.MapGet("/api/error", () =>
@@ -280,7 +287,6 @@ app.MapGet("/api/students/all-with-deleted", async (TmsDbContext db) =>
     });
 });
 
-app.MapControllers();
 
 // Seed test data at startup
 // Seed test data at startup
@@ -307,8 +313,7 @@ using (var scope = app.Services.CreateScope())
         {
             new() { Code = "CS-101", Title = "Introduction to Computer Science", MaxCapacity = 30 },
             new() { Code = "CS-201", Title = "Data Structures and Algorithms", MaxCapacity = 25 },
-            new() { Code = "MAT-101", Title = "Calculus I", MaxCapacity = 40 },
-            new() { Code = "c#-01",Title = "C# Fundamental",MaxCapacity =30}
+            new() { Code = "MAT-101", Title = "Calculus I", MaxCapacity = 40 }
         };
         context.Courses.AddRange(courses);
         context.SaveChanges(); // Persist to database so PostgreSQL populates primary key IDs
