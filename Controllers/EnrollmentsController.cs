@@ -15,7 +15,7 @@ namespace TmsApi.Controllers;
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
 public class EnrollmentsController(
     ICourseService courseService,
-    IEnrollmentService enrollmentService) : ControllerBase
+    IEnrollmentService enrollmentService,IStudentService studentService) : ControllerBase
 {
     // Action 1: GET /api/courses/{courseId}/enrollments (Returns the whole list)
     [HttpGet(Name = "ListCourseEnrollments")]
@@ -56,8 +56,25 @@ public class EnrollmentsController(
         var course = await courseService.GetByIdAsync(courseId, ct);
         if (course is null)
         {
-            return NotFound();
+           // return NotFound();
+           return Problem(
+             statusCode: StatusCodes.Status404NotFound,
+             title: "Course Not Found",
+             detail: $"Course with ID {courseId} does not exist."
+                        );
         }
+       // 2. Look up the student using ToString() to match the string signature. 
+       var student = await studentService.GetByIdAsync(request.StudentId.ToString());
+        if (student is null)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Student Not Found",
+                detail: $"Student with ID {request.StudentId} does not exist in the system."
+            );
+        }
+
+
 
         // 2. Check capacity limits next. If full, return 409 Conflict with Problem details body
         if (course.EnrollmentCount >= course.MaxCapacity)
