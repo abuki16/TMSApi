@@ -27,10 +27,10 @@ public class CoursesController(ICourseService courseService, LinkGenerator linkG
     }
     // [HttpGet]
     // public async Task<IActionResult> GetAllCourses(CancellationToken ct)
-   // {
-   //     var courses = await courseService.GetAllAsync(ct);
-   //     return Ok(courses); // Returns a 200 OK status with the array of courses
-   // }
+    // {
+    //     var courses = await courseService.GetAllAsync(ct);
+    //     return Ok(courses); // Returns a 200 OK status with the array of courses
+    // }
 
     [HttpGet("{id:int}", Name = nameof(GetCourseById))]
     [ProducesResponseType(typeof(CourseDetailDto), StatusCodes.Status200OK)]
