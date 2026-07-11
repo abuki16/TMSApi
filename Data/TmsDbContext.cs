@@ -14,6 +14,8 @@ public class TmsDbContext(DbContextOptions<TmsDbContext> options) : DbContext(op
 protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+       // CRITICAL LINK: This automatically discovers and runs EnrollmentConfiguration and AssessmentConfiguration!
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(TmsDbContext).Assembly);
 
         modelBuilder.Entity<Student>().Property<DateTime>("LastUpdated");
         // Tell EF Core to map Version to PostgreSQL's system xmin column

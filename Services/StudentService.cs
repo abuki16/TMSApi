@@ -45,7 +45,8 @@ public class StudentService(TmsDbContext dbContext, ILogger<StudentService> logg
             RegistrationNumber = $"REG-{student.Id}", 
             Name = student.Name,
             GPA = student.GPA,
-            IsActive = true
+            IsActive = true,
+            IsDeleted = false
         };
 
         await dbContext.Students.AddAsync(dbStudent);
@@ -107,8 +108,10 @@ public class StudentService(TmsDbContext dbContext, ILogger<StudentService> logg
         var student = await dbContext.Students.FirstOrDefaultAsync(s => s.Id == parsedId);
         if (student == null) return false;
 
-        dbContext.Students.Remove(student);
-        await dbContext.SaveChangesAsync();
+        // dbContext.Students.Remove(student);
+        // await dbContext.SaveChangesAsync();
+        student.IsDeleted = true; 
+    await dbContext.SaveChangesAsync();
 
         logger.LogInformation("Deleted student record: {StudentId}", id);
         return true;
