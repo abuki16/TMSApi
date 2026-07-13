@@ -37,7 +37,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddScoped<IStudentService, StudentService>();
 builder.Services.AddScoped<ICourseService, CourseService>();
 builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
-
+builder.Services.AddScoped<IAssessmentService, AssessmentService>();
 // If EnrollmentWorker is a BackgroundService, leave it as Singleton or change it to Transient
 builder.Services.AddSingleton<EnrollmentWorker>();
 
