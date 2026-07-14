@@ -20,17 +20,24 @@ builder.Services.AddControllers(options =>
 {
 options.Filters.Add<AuditLogFilter>();
 });
+
+//API
 builder.Services.AddApiVersioning(options =>
 {
-options.DefaultApiVersion = new ApiVersion(1, 0);
-options.AssumeDefaultVersionWhenUnspecified = true;
-options.ReportApiVersions = true;
-options.ApiVersionReader = new UrlSegmentApiVersionReader();
+    options.DefaultApiVersion = new ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ReportApiVersions = true;
+    
+    // Combine both URL-segment and Header-based version reading
+    options.ApiVersionReader = ApiVersionReader.Combine(
+        new UrlSegmentApiVersionReader(),
+        new HeaderApiVersionReader("X-Api-Version")
+    );
 })
 .AddApiExplorer(options =>
 {
-options.GroupNameFormat = "'v'VVV";
-options.SubstituteApiVersionInUrl = true;
+    options.GroupNameFormat = "'v'VVV";
+    options.SubstituteApiVersionInUrl = true;
 });
 
 // Exercise 6: Register the ProblemDetails service framework
