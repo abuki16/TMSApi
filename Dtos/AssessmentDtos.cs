@@ -38,10 +38,10 @@ public record AssessmentResponseDto(
     int Id,
     string Title,
     decimal MaxScore,
-    decimal ScoreObtained,
+    //decimal ScoreObtained,
     decimal Weight,
-    int CourseId,
-    int StudentId
+    int CourseId
+    //int StudentId
 );
 
 // 4. Detailed HATEOAS resource DTO (Matches CourseDetailDto structural standard)
@@ -50,9 +50,9 @@ public record AssessmentDetailDto
     public required int Id { get; init; }
     public required string Title { get; init; }
     public required decimal MaxScore { get; init; }
-    public required decimal ScoreObtained { get; init; }
+    //public required decimal ScoreObtained { get; init; }
     public required decimal Weight { get; init; }
     public required int CourseId { get; init; }
-    public required int StudentId { get; init; }
+    //public required int StudentId { get; init; }
     public required IReadOnlyList<LinkDto> Links { get; init; }
 }

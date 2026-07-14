@@ -29,10 +29,10 @@ public class AssessmentService(TmsDbContext dbContext) : IAssessmentService
                 a.Id,
                 a.Title,
                 a.MaxScore,
-                a.ScoreObtained,
+              //  a.ScoreObtained,
                 a.Weight,
-                a.CourseId,
-                a.StudentId
+                a.CourseId
+               // a.StudentId
             ))
             .ToListAsync();
     }
@@ -40,7 +40,7 @@ public class AssessmentService(TmsDbContext dbContext) : IAssessmentService
     public async Task<Assessment> CreateAssessmentAsync(Assessment assessment)
     {
         // ... rest of your CreateAssessmentAsync code ...
-        var studentExists = await dbContext.Students.AnyAsync(s => s.Id == assessment.StudentId);
+    //    var studentExists = await dbContext.Students.AnyAsync(s => s.Id == assessment.StudentId);
         // (Keep all your existing validation logic here)
         
         await dbContext.Assessments.AddAsync(assessment);
@@ -52,7 +52,7 @@ public class AssessmentService(TmsDbContext dbContext) : IAssessmentService
     {
         return await dbContext.Assessments
             .Include(a => a.Course)
-            .Include(a => a.Student)
+           // .Include(a => a.Student)
             .FirstOrDefaultAsync(a => a.Id == id);
     }
 
@@ -66,7 +66,7 @@ public class AssessmentService(TmsDbContext dbContext) : IAssessmentService
             throw new ArgumentException($"Validation Failed: Score obtained ({newScore}) cannot exceed max score ({assessment.MaxScore}).");
         }
 
-        assessment.ScoreObtained = newScore;
+       // assessment.ScoreObtained = newScore;
         await dbContext.SaveChangesAsync();
         return assessment;
     }

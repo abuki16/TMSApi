@@ -1,4 +1,5 @@
 using TmsApi.Services;
+using Asp.Versioning;
 using Microsoft.AspNetCore.Authentication;
 using Scalar.AspNetCore;
 using TmsApi.Worker;
@@ -8,6 +9,7 @@ using TmsApi.Data;
 using TmsApi.Entities;
 using Microsoft.AspNetCore.Mvc;
 using TmsApi.Filters;
+
   
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,7 +20,18 @@ builder.Services.AddControllers(options =>
 {
 options.Filters.Add<AuditLogFilter>();
 });
-
+builder.Services.AddApiVersioning(options =>
+{
+options.DefaultApiVersion = new ApiVersion(1, 0);
+options.AssumeDefaultVersionWhenUnspecified = true;
+options.ReportApiVersions = true;
+options.ApiVersionReader = new UrlSegmentApiVersionReader();
+})
+.AddApiExplorer(options =>
+{
+options.GroupNameFormat = "'v'VVV";
+options.SubstituteApiVersionInUrl = true;
+});
 
 // Exercise 6: Register the ProblemDetails service framework
 builder.Services.AddProblemDetails(); 
@@ -118,6 +131,8 @@ if (app.Environment.IsDevelopment())
     // Interactive API explorer
     app.MapScalarApiReference();
 }
+//m7
+app.UseMiddleware<TmsApi.Api.Middleware.V1DeprecationMiddleware>();
 
 app.MapControllers();
 

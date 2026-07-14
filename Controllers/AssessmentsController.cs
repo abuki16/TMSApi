@@ -63,10 +63,10 @@ public class AssessmentsController(
             Id = assessment.Id,
             Title = assessment.Title,
             MaxScore = (decimal)assessment.MaxScore,
-            ScoreObtained = (decimal)assessment.ScoreObtained,
+            //ScoreObtained = (decimal)assessment.ScoreObtained,
             Weight = (decimal)assessment.Weight,
             CourseId = assessment.CourseId,
-            StudentId = assessment.StudentId,
+           // StudentId = assessment.StudentId,
             Links = links
         };
 
@@ -91,7 +91,7 @@ public class AssessmentsController(
         
         // Strict check to block both "Midterm Exam" and "Midterm" together
         var isDuplicate = existingAssessments.Any(a => 
-            a.StudentId == request.StudentId && 
+           // a.StudentId == request.StudentId && 
             ((a.Title.Contains("midterm", StringComparison.OrdinalIgnoreCase) && 
               request.Title.Contains("midterm", StringComparison.OrdinalIgnoreCase)) ||
              a.Title.Equals(request.Title, StringComparison.OrdinalIgnoreCase)));
@@ -109,10 +109,10 @@ public class AssessmentsController(
         {
             Title = request.Title,
             MaxScore = request.MaxScore,
-            ScoreObtained = request.ScoreObtained,
+            //ScoreObtained = request.ScoreObtained,
             Weight = request.Weight,
             CourseId = courseId,
-            StudentId = request.StudentId
+            //StudentId = request.StudentId
         };
 
         try
@@ -124,10 +124,10 @@ public class AssessmentsController(
                 result.Id,
                 result.Title,
                 (decimal)result.MaxScore,
-                (decimal)result.ScoreObtained,
+                //(decimal)result.ScoreObtained,
                 (decimal)result.Weight,
-                result.CourseId,
-                result.StudentId
+                result.CourseId
+                //result.StudentId
             );
             return CreatedAtAction(nameof(GetAssessment), new { courseId, id = result.Id }, responseDto);
         }
@@ -159,10 +159,10 @@ public class AssessmentsController(
                 updated.Id,
                 updated.Title,
                 (decimal)updated.MaxScore,
-                (decimal)updated.ScoreObtained,
+               // (decimal)updated.ScoreObtained,
                 (decimal)updated.Weight,
-                updated.CourseId,
-                updated.StudentId
+                updated.CourseId
+               // updated.StudentId
             );
 
             return Ok(responseDto);
@@ -190,3 +190,9 @@ public class AssessmentsController(
         return NoContent();
     }
 }
+
+
+
+// 2 assessmwents
+//  1st  - the assessment definition
+// 2 nd ass - the students assessment result
