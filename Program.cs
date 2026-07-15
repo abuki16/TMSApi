@@ -58,6 +58,7 @@ builder.Services.AddScoped<IStudentService, StudentService>();
 builder.Services.AddScoped<ICourseService, CourseService>();
 builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 builder.Services.AddScoped<IAssessmentService, AssessmentService>();
+builder.Services.AddScoped<IAssessmentResultService, AssessmentResultService>();
 // If EnrollmentWorker is a BackgroundService, leave it as Singleton or change it to Transient
 builder.Services.AddSingleton<EnrollmentWorker>();
 

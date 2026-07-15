@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using TmsApi.Dtos;
 using TmsApi.Services;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,7 +16,8 @@ namespace TmsApi.Controllers;
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
 public class EnrollmentsController(
     ICourseService courseService,
-    IEnrollmentService enrollmentService,IStudentService studentService) : ControllerBase
+    IEnrollmentService enrollmentService,
+    IStudentService studentService) : ControllerBase
 {
     // Action 1: GET /api/courses/{courseId}/enrollments (Returns the whole list)
     [HttpGet(Name = "ListCourseEnrollments")]
@@ -49,22 +51,24 @@ public class EnrollmentsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [EndpointSummary("Enrol a student in a course")]
-    [EndpointDescription("Returns 404 if the course does not exist, 409 if the course has reached MaxCapacity.")]
+    [EndpointDescription("Returns 404 if the course/student does not exist, 409 if full or already enrolled.")]
     public async Task<IActionResult> EnrollStudent(int courseId, EnrollStudentRequest request, CancellationToken ct)
     {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
         // 1. Look up the parent course first. If null, return 404 NotFound.
         var course = await courseService.GetByIdAsync(courseId, ct);
         if (course is null)
         {
-           // return NotFound();
-           return Problem(
-             statusCode: StatusCodes.Status404NotFound,
-             title: "Course Not Found",
-             detail: $"Course with ID {courseId} does not exist."
-                        );
+            return Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Course Not Found",
+                detail: $"Course with ID {courseId} does not exist."
+            );
         }
-       // 2. Look up the student using ToString() to match the string signature. 
-       var student = await studentService.GetByIdAsync(request.StudentId.ToString());
+
+        // 2. Look up the student using ToString() to match the string signature. 
+        var student = await studentService.GetByIdAsync(request.StudentId.ToString());
         if (student is null)
         {
             return Problem(
@@ -74,26 +78,57 @@ public class EnrollmentsController(
             );
         }
 
-
-
-        // 2. Check capacity limits next. If full, return 409 Conflict with Problem details body
-        if (course.EnrollmentCount >= course.MaxCapacity)
+        // 3. Prevent duplicate enrollment in the same course
+        // Checks the existing enrollments for this course to see if the student is already registered
+        var existingEnrollments = await enrollmentService.GetByCourseAsync(courseId, ct);
+        
+        // This checks if any existing enrollment item shares the incoming StudentId
+        bool isAlreadyEnrolled = false;
+        foreach (var item in existingEnrollments)
         {
-            return Conflict(new ProblemDetails
+            if (item.StudentId == request.StudentId)
             {
-                Title = "Course is full",
-                Detail = $"Course '{course.Title}' has reached its maximum capacity of {course.MaxCapacity}.",
-                Status = StatusCodes.Status409Conflict,
-                Type = "https://tools.ietf.org/html/rfc9110#section-15.5.10"
-            });
+                isAlreadyEnrolled = true;
+                break;
+            }
         }
 
-        // 3. Otherwise, safely proceed with creation
-        var enrollment = await enrollmentService.CreateAsync(courseId, request, ct);
-        
-        return CreatedAtAction(
-            nameof(GetEnrollment),
-            new { courseId, id = enrollment.Id },
-            enrollment);
+        if (isAlreadyEnrolled)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Duplicate Enrollment",
+                detail: $"Student with ID {request.StudentId} is already enrolled in this course."
+            );
+        }
+
+        // 4. Check capacity limits next. If full, return 409 Conflict.
+        if (course.EnrollmentCount >= course.MaxCapacity)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Course is full",
+                detail: $"Course '{course.Title}' has reached its maximum capacity of {course.MaxCapacity}."
+            );
+        }
+
+        // 5. Otherwise, safely proceed with creation
+        try
+        {
+            var enrollment = await enrollmentService.CreateAsync(courseId, request, ct);
+            
+            return CreatedAtAction(
+                nameof(GetEnrollment),
+                new { courseId, id = enrollment.Id },
+                enrollment);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Enrollment Failure",
+                detail: ex.Message
+            );
+        }
     }
 }

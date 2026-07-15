@@ -13,36 +13,37 @@ public interface IAssessmentService
 {
     Task<Assessment> CreateAssessmentAsync(Assessment assessment);
     Task<Assessment?> GetByIdAsync(int id);
-    Task<Assessment?> UpdateScoreAsync(int id, decimal newScore);
+    Task<Assessment?> UpdateScoreAsync(int id, decimal newMaxScore);
     Task<IReadOnlyList<AssessmentResponseDto>> GetByCourseAsync(int courseId);
     Task<bool> DeleteAssessmentAsync(int id);
 }
 
 public class AssessmentService(TmsDbContext dbContext) : IAssessmentService
 {
-    // 🌟 MAKE SURE THIS IS INSIDE THE BRACKETS HERE:
     public async Task<IReadOnlyList<AssessmentResponseDto>> GetByCourseAsync(int courseId)
     {
         return await dbContext.Assessments
+            .AsNoTracking()
             .Where(a => a.CourseId == courseId)
             .Select(a => new AssessmentResponseDto(
                 a.Id,
                 a.Title,
                 a.MaxScore,
-              //  a.ScoreObtained,
                 a.Weight,
                 a.CourseId
-               // a.StudentId
             ))
             .ToListAsync();
     }
 
     public async Task<Assessment> CreateAssessmentAsync(Assessment assessment)
     {
-        // ... rest of your CreateAssessmentAsync code ...
-    //    var studentExists = await dbContext.Students.AnyAsync(s => s.Id == assessment.StudentId);
-        // (Keep all your existing validation logic here)
-        
+        // Validate that the course exists before attaching the definition
+        var courseExists = await dbContext.Courses.AnyAsync(c => c.Id == assessment.CourseId);
+        if (!courseExists)
+        {
+            throw new ArgumentException($"Validation Failed: Course with ID {assessment.CourseId} does not exist.");
+        }
+
         await dbContext.Assessments.AddAsync(assessment);
         await dbContext.SaveChangesAsync();
         return assessment;
@@ -52,21 +53,23 @@ public class AssessmentService(TmsDbContext dbContext) : IAssessmentService
     {
         return await dbContext.Assessments
             .Include(a => a.Course)
-           // .Include(a => a.Student)
             .FirstOrDefaultAsync(a => a.Id == id);
     }
 
-    public async Task<Assessment?> UpdateScoreAsync(int id, decimal newScore)
+    /// <summary>
+    /// Updates the maximum score limit for the assessment definition.
+    /// </summary>
+    public async Task<Assessment?> UpdateScoreAsync(int id, decimal newMaxScore)
     {
         var assessment = await dbContext.Assessments.FirstOrDefaultAsync(a => a.Id == id);
         if (assessment == null) return null;
 
-        if (newScore > assessment.MaxScore)
+        if (newMaxScore <= 0)
         {
-            throw new ArgumentException($"Validation Failed: Score obtained ({newScore}) cannot exceed max score ({assessment.MaxScore}).");
+            throw new ArgumentException("Validation Failed: Maximum score must be greater than zero.");
         }
 
-       // assessment.ScoreObtained = newScore;
+        assessment.MaxScore = newMaxScore;
         await dbContext.SaveChangesAsync();
         return assessment;
     }

@@ -8,33 +8,29 @@ public class AssessmentConfiguration : IEntityTypeConfiguration<Assessment>
 {
     public void Configure(EntityTypeBuilder<Assessment> builder)
     {
+        // Primary Key
         builder.HasKey(a => a.Id);
 
-        // 1. Configure Course Relationship
+        // 1. Configure Course Relationship (Definition Scope)
         builder.HasOne(a => a.Course)
-            .WithMany() // Leave empty if Course doesn't have a List<Assessment> property
+            .WithMany() // Keep empty if your Course entity doesn't have an ICollection<Assessment>
             .HasForeignKey(a => a.CourseId)
-            .OnDelete(DeleteBehavior.Restrict); // Restrict prevents multiple cascade paths error in SQL Server
+            .OnDelete(DeleteBehavior.Restrict); 
 
-        // 2. Configure Student Relationship
-        // builder.HasOne(a => a.Student)
-        //     .WithMany() // Leave empty if Student doesn't have a List<Assessment> property
-        //     .HasForeignKey(a => a.StudentId)
-        //     .OnDelete(DeleteBehavior.Restrict);
+        // 2. Prevent duplicate Assessment definitions within the same Course
+        builder.HasIndex(a => new { a.CourseId, a.Title })
+            .IsUnique();
 
-        // builder.HasQueryFilter(a => !a.Student.IsDeleted);
-
-        // 3. Precision configurations for decimal scores
+        // 3. Precision configurations for definitions
         builder.Property(a => a.MaxScore)
-            .HasPrecision(5, 2); // Handles scores up to 999.99 cleanly
-
-      //  builder.Property(a => a.ScoreObtained)
-        //    .HasPrecision(5, 2);
+            .HasPrecision(5, 2) // Supports scores up to 999.99
+            .IsRequired();
 
         builder.Property(a => a.Weight)
-            .HasPrecision(3, 2); // Handles fractions like 0.30 (30%) perfectly
+            .HasPrecision(3, 2) // Supports fractions up to 1.00 (100%)
+            .IsRequired();
             
-        // 4. Set maximum string length for the Title parameter
+        // 4. Text Validation Constraints
         builder.Property(a => a.Title)
             .HasMaxLength(100)
             .IsRequired();

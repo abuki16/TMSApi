@@ -12,8 +12,8 @@ using TmsApi.Data;
 namespace TMSApi.Migrations
 {
     [DbContext(typeof(TmsDbContext))]
-    [Migration("20260714082805_RemoveStudentFromAssessment")]
-    partial class RemoveStudentFromAssessment
+    [Migration("20260715060401_UpdatePostgresConcurrencyToken")]
+    partial class UpdatePostgresConcurrencyToken
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -51,9 +51,47 @@ namespace TMSApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CourseId");
+                    b.HasIndex("CourseId", "Title")
+                        .IsUnique();
 
                     b.ToTable("Assessments");
+                });
+
+            modelBuilder.Entity("TmsApi.Entities.AssessmentResult", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AssessmentId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("ScoreObtained")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("Weight")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("AssessmentId", "StudentId")
+                        .IsUnique();
+
+                    b.ToTable("AssessmentResults");
                 });
 
             modelBuilder.Entity("TmsApi.Entities.Certificate", b =>
@@ -201,6 +239,25 @@ namespace TMSApi.Migrations
                         .IsRequired();
 
                     b.Navigation("Course");
+                });
+
+            modelBuilder.Entity("TmsApi.Entities.AssessmentResult", b =>
+                {
+                    b.HasOne("TmsApi.Entities.Assessment", "Assessment")
+                        .WithMany()
+                        .HasForeignKey("AssessmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TmsApi.Entities.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Assessment");
+
+                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("TmsApi.Entities.Certificate", b =>

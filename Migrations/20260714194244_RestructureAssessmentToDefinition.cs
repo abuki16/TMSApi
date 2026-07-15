@@ -5,13 +5,17 @@
 namespace TMSApi.Migrations
 {
     /// <inheritdoc />
-    public partial class RemoveStudentFromAssessment : Migration
+    public partial class RestructureAssessmentToDefinition : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
                 name: "FK_Assessments_Students_StudentId",
+                table: "Assessments");
+
+            migrationBuilder.DropIndex(
+                name: "IX_Assessments_CourseId",
                 table: "Assessments");
 
             migrationBuilder.DropIndex(
@@ -25,11 +29,21 @@ namespace TMSApi.Migrations
             migrationBuilder.DropColumn(
                 name: "StudentId",
                 table: "Assessments");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Assessments_CourseId_Title",
+                table: "Assessments",
+                columns: new[] { "CourseId", "Title" },
+                unique: true);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropIndex(
+                name: "IX_Assessments_CourseId_Title",
+                table: "Assessments");
+
             migrationBuilder.AddColumn<decimal>(
                 name: "ScoreObtained",
                 table: "Assessments",
@@ -45,6 +59,11 @@ namespace TMSApi.Migrations
                 type: "integer",
                 nullable: false,
                 defaultValue: 0);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Assessments_CourseId",
+                table: "Assessments",
+                column: "CourseId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Assessments_StudentId",

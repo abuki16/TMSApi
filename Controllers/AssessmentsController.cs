@@ -13,7 +13,7 @@ namespace TmsApi.Controllers;
 
 [ApiController]
 [Route("api/courses/{courseId:int}/assessments")]
-[Tags("Assessments")]
+[Tags("Assessment Definitions")]
 [Produces("application/json")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
 public class AssessmentsController(
@@ -25,7 +25,7 @@ public class AssessmentsController(
     [HttpGet(Name = "ListCourseAssessments")]
     [ProducesResponseType(typeof(IReadOnlyList<AssessmentResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    [EndpointSummary("List assessments for a course")]
+    [EndpointSummary("List assessment definitions for a course")]
     public async Task<IActionResult> GetAssessments(int courseId)
     {
         var course = await courseService.GetByIdAsync(courseId, default);
@@ -39,21 +39,21 @@ public class AssessmentsController(
     [HttpGet("{id:int}", Name = nameof(GetAssessment))]
     [ProducesResponseType(typeof(AssessmentDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    [EndpointSummary("Get one assessment with HATEOAS links")]
+    [EndpointSummary("Get one assessment definition with HATEOAS links")]
     public async Task<IActionResult> GetAssessment(int courseId, int id)
     {
         var assessment = await assessmentService.GetByIdAsync(id);
         if (assessment is null || assessment.CourseId != courseId) return NotFound();
 
         var selfPath = linkGenerator.GetPathByName(HttpContext, nameof(GetAssessment), new { courseId, id });
-        var updatePath = linkGenerator.GetPathByName(HttpContext, "UpdateAssessmentScore", new { courseId, id });
+        var updatePath = linkGenerator.GetPathByName(HttpContext, "UpdateAssessmentMaxScore", new { courseId, id });
         var deletePath = linkGenerator.GetPathByName(HttpContext, "DeleteAssessment", new { courseId, id });
         var coursePath = linkGenerator.GetPathByName(HttpContext, "GetCourseById", new { id = courseId });
 
         var links = new List<LinkDto>
         {
             new(selfPath ?? "", "self", "GET"),
-            new(updatePath ?? "", "update_score", "PATCH"),
+            new(updatePath ?? "", "update_max_score", "PATCH"),
             new(deletePath ?? "", "delete", "DELETE"),
             new(coursePath ?? "", "course_details", "GET")
         };
@@ -63,10 +63,8 @@ public class AssessmentsController(
             Id = assessment.Id,
             Title = assessment.Title,
             MaxScore = (decimal)assessment.MaxScore,
-            //ScoreObtained = (decimal)assessment.ScoreObtained,
             Weight = (decimal)assessment.Weight,
             CourseId = assessment.CourseId,
-           // StudentId = assessment.StudentId,
             Links = links
         };
 
@@ -75,8 +73,8 @@ public class AssessmentsController(
 
     // Action 3: POST /api/courses/{courseId}/assessments
     [HttpPost]
-    [EndpointSummary("Create an assessment entry for a student")]
-    [EndpointDescription("Registers a new assessment score (e.g., Midterm, Final) for a specific student enrolled in the course.")]
+    [EndpointSummary("Create an assessment definition for a course")]
+    [EndpointDescription("Registers a new assessment type (e.g., Midterm, Final Project) for a course curriculum.")]
     [ProducesResponseType(typeof(AssessmentResponseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
@@ -89,10 +87,9 @@ public class AssessmentsController(
 
         var existingAssessments = await assessmentService.GetByCourseAsync(courseId);
         
-        // Strict check to block both "Midterm Exam" and "Midterm" together
+        // Block duplicate assignments in the same course (e.g. duplicate midterms)
         var isDuplicate = existingAssessments.Any(a => 
-           // a.StudentId == request.StudentId && 
-            ((a.Title.Contains("midterm", StringComparison.OrdinalIgnoreCase) && 
+             ((a.Title.Contains("midterm", StringComparison.OrdinalIgnoreCase) && 
               request.Title.Contains("midterm", StringComparison.OrdinalIgnoreCase)) ||
              a.Title.Equals(request.Title, StringComparison.OrdinalIgnoreCase)));
 
@@ -101,7 +98,7 @@ public class AssessmentsController(
             return Problem(
                 statusCode: StatusCodes.Status409Conflict,
                 title: "Academic Constraint Violation",
-                detail: $"An assessment matching or resembling '{request.Title}' already exists for student ID {request.StudentId} in this course."
+                detail: $"An assessment matching or resembling '{request.Title}' already exists in this course curriculum."
             );
         }
 
@@ -109,25 +106,20 @@ public class AssessmentsController(
         {
             Title = request.Title,
             MaxScore = request.MaxScore,
-            //ScoreObtained = request.ScoreObtained,
             Weight = request.Weight,
-            CourseId = courseId,
-            //StudentId = request.StudentId
+            CourseId = courseId
         };
 
         try
         {
             var result = await assessmentService.CreateAssessmentAsync(assessmentEntity);
 
-            // Instantiate utilizing the primary positional constructor
             var responseDto = new AssessmentResponseDto(
                 result.Id,
                 result.Title,
                 (decimal)result.MaxScore,
-                //(decimal)result.ScoreObtained,
                 (decimal)result.Weight,
                 result.CourseId
-                //result.StudentId
             );
             return CreatedAtAction(nameof(GetAssessment), new { courseId, id = result.Id }, responseDto);
         }
@@ -141,28 +133,26 @@ public class AssessmentsController(
         }
     }
 
-    // Action 4: PATCH /api/courses/{courseId}/assessments/{id}/score
-    [HttpPatch("{id:int}/score", Name = "UpdateAssessmentScore")]
-    [ProducesResponseType(typeof(AssessmentResponseDto), StatusCodes.Status200OK)] //  Uses clean DTO for OpenAPI
+    // Action 4: PATCH /api/courses/{courseId}/assessments/{id}/max-score
+    [HttpPatch("{id:int}/max-score", Name = "UpdateAssessmentMaxScore")]
+    [ProducesResponseType(typeof(AssessmentResponseDto), StatusCodes.Status200OK)] 
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    [EndpointSummary("Update a score outcome for an assessment record")]
-    public async Task<IActionResult> UpdateScore(int courseId, int id, [FromBody] UpdateAssessmentScoreRequest request)
+    [EndpointSummary("Update the maximum possible score for an assessment definition")]
+    public async Task<IActionResult> UpdateMaxScore(int courseId, int id, [FromBody] UpdateAssessmentMaxScoreRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         try
         {
-            var updated = await assessmentService.UpdateScoreAsync(id, request.ScoreObtained);
+            var updated = await assessmentService.UpdateScoreAsync(id, request.MaxScore);
             if (updated is null || updated.CourseId != courseId) return NotFound();
 
-           var responseDto = new AssessmentResponseDto(
+            var responseDto = new AssessmentResponseDto(
                 updated.Id,
                 updated.Title,
                 (decimal)updated.MaxScore,
-               // (decimal)updated.ScoreObtained,
                 (decimal)updated.Weight,
                 updated.CourseId
-               // updated.StudentId
             );
 
             return Ok(responseDto);
@@ -174,9 +164,9 @@ public class AssessmentsController(
     }
 
     // Action 5: DELETE /api/courses/{courseId}/assessments/{id}
-    [HttpDelete("{id:int}")]
-    [EndpointSummary("Delete an assessment record")]
-    [EndpointDescription("Permanently removes an assessment record from the database. This action cannot be undone.")]
+    [HttpDelete("{id:int}", Name = "DeleteAssessment")]
+    [EndpointSummary("Delete an assessment definition")]
+    [EndpointDescription("Permanently removes an assessment definition from the course. This action cannot be undone.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteAssessment(int courseId, int id)
@@ -184,14 +174,11 @@ public class AssessmentsController(
         var assessment = await assessmentService.GetByIdAsync(id);
         if (assessment is null || assessment.CourseId != courseId) return NotFound();
 
-        // Perform the deletion inside your database context:
-       await assessmentService.DeleteAssessmentAsync(id);
+        await assessmentService.DeleteAssessmentAsync(id);
 
         return NoContent();
     }
 }
-
-
 
 // 2 assessmwents
 //  1st  - the assessment definition

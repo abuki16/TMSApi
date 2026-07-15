@@ -9,18 +9,35 @@ public class TmsDbContext(DbContextOptions<TmsDbContext> options) : DbContext(op
     public DbSet<Enrollment> Enrollments => Set<Enrollment>();
   
     public DbSet<Assessment> Assessments => Set<Assessment>();
+    public DbSet<AssessmentResult> AssessmentResults => Set<AssessmentResult>();
     public DbSet<Certificate> Certificates => Set<Certificate>();
     
 protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        base.OnModelCreating(modelBuilder);
-       // CRITICAL LINK: This automatically discovers and runs EnrollmentConfiguration and AssessmentConfiguration!
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(TmsDbContext).Assembly);
+{
+    base.OnModelCreating(modelBuilder);
+    
+    modelBuilder.ApplyConfigurationsFromAssembly(typeof(TmsDbContext).Assembly);
 
-        modelBuilder.Entity<Student>().Property<DateTime>("LastUpdated");
-        // Tell EF Core to map Version to PostgreSQL's system xmin column
-        modelBuilder.Entity<Student>().Property(s => s.Version).IsRowVersion();
-        // Exercise 9 Task 1: Global Query Filter for Soft Delete
+    modelBuilder.Entity<Student>().Property<DateTime>("LastUpdated");
+    
+    modelBuilder.Entity<Student>()
+        .Property(s => s.Version)
+        .HasColumnName("xmin")
+        .HasColumnType("xid")
+        .ValueGeneratedOnAddOrUpdate()
+        .IsConcurrencyToken();
+
+    // ==========================================
+    // ADD THIS: Explicit Decimal Precision Mapping
+    // ==========================================
+    modelBuilder.Entity<AssessmentResult>()
+        .Property(ar => ar.ScoreObtained)
+        .HasPrecision(18, 2);
+
+    modelBuilder.Entity<AssessmentResult>()
+        .Property(ar => ar.Weight)
+        .HasPrecision(18, 2);
+
     modelBuilder.Entity<Student>().HasQueryFilter(s => !s.IsDeleted);
 }
     
