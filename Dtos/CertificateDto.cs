@@ -1,0 +1,24 @@
+using System.Text.Json.Serialization;
+namespace TmsApi.Dtos;
+
+public record IssueCertificateRequest(
+    int StudentId,
+    int CourseId,
+    string SerialNumber
+);
+
+public record CertificateResponseDto(
+    int Id,
+    string SerialNumber,
+    DateTime IssuedAt,
+    int StudentId,
+    string StudentName,
+    int CourseId,
+    string CourseTitle,
+    List<LinkDto>? Links = null
+)
+{
+    // This backing property guarantees that if Links is null OR empty, it's ignored completely!
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<LinkDto>? Links { get; init; } = Links is { Count: > 0 } ? Links : null;
+}
