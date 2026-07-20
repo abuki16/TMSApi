@@ -8,6 +8,7 @@ using TmsApi.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore.Design;
 using TmsApi.Application.DTOs;
 using TmsApi.Domain.Entities;
+using TmsApi.Infrastructure.Services;
 
 namespace TmsApi.Api.Controllers;
 

@@ -1,9 +1,10 @@
+
 using Microsoft.EntityFrameworkCore;
 using TmsApi.Application.DTOs;
 using TmsApi.Domain.Entities;
 using TmsApi.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore.Design;
-namespace TmsApi.Infrastructure.Persistence;
+
+namespace TmsApi.Infrastructure.Services;
 
 public class CertificateService
 {

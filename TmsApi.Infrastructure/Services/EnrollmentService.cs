@@ -1,17 +1,16 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using System;
-using Microsoft.EntityFrameworkCore.Design;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using TmsApi.Application.DTOs;
 using TmsApi.Application.Interfaces;
 using TmsApi.Domain.Entities;
 using TmsApi.Infrastructure.Persistence;
 
-namespace TmsApi.Infrastructure.Persistence;
+namespace TmsApi.Infrastructure.Services;
 
 public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> logger) : IEnrollmentService
 {
@@ -19,34 +18,93 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
         context.Enrollments
             .AsNoTracking()
             .Where(e => e.Id == id && e.CourseId == courseId)
-            .Select(e => new EnrollmentResponseDto(e.Id, e.CourseId, e.StudentId, e.EnrolledAt))
+            .Select(e => new EnrollmentResponseDto(
+                e.Id, 
+                e.CourseId, 
+                e.StudentId, 
+                e.EnrolledAt,
+                // 🟢 Project the related navigation property details directly for your lesson studies
+                new CourseScheduleInfoDto(e.Course.Code, e.Course.Title)))
             .FirstOrDefaultAsync(ct);
 
-    // --- ADD THIS METHOD RIGHT HERE ---
     public async Task<IReadOnlyList<EnrollmentResponseDto>> GetByCourseAsync(int courseId, CancellationToken ct)
     {
         return await context.Enrollments
             .AsNoTracking()
             .Where(e => e.CourseId == courseId)
-            .Select(e => new EnrollmentResponseDto(e.Id, e.CourseId, e.StudentId, e.EnrolledAt))
+            .Select(e => new EnrollmentResponseDto(
+                e.Id, 
+                e.CourseId, 
+                e.StudentId, 
+                e.EnrolledAt,
+                new CourseScheduleInfoDto(e.Course.Code, e.Course.Title)))
             .ToListAsync(ct);
     }
 
     public async Task<EnrollmentResponseDto> CreateAsync(int courseId, EnrollStudentRequest request, CancellationToken ct)
+{
+    var enrollment = new Enrollment
     {
-        var enrollment = new Enrollment
-        {
-            CourseId = courseId,
-            StudentId = request.StudentId,
-            EnrolledAt = DateTime.UtcNow
-        };
+        CourseId = courseId,
+        StudentId = request.StudentId,
+        EnrolledAt = DateTime.UtcNow
+    };
 
+    context.Enrollments.Add(enrollment);
+    await context.SaveChangesAsync(ct);
+
+    logger.LogInformation("Enrolled student {StudentId} into course {CourseId}", request.StudentId, courseId);
+
+    // FIX: Await the result and handle the potential null case explicitly
+    var createdEnrollment = await GetByIdAsync(courseId, enrollment.Id, ct);
+
+    if (createdEnrollment == null)
+    {
+        throw new InvalidOperationException($"Failed to retrieve enrollment with ID {enrollment.Id} after creation.");
+    }
+
+    return createdEnrollment;
+}
+    // --- CQRS HANDLER METHODS ---
+
+    public async Task<IEnumerable<EnrollmentResponseDto>> GetByStudentIdAsync(int studentId, CancellationToken ct)
+    {
+        return await context.Enrollments
+            .AsNoTracking()
+            .Where(e => e.StudentId == studentId)
+            .Select(e => new EnrollmentResponseDto(
+                e.Id, 
+                e.CourseId, 
+                e.StudentId, 
+                e.EnrolledAt,
+                // 🟢 Populates the e.Course property so GetStudentScheduleHandler compiles completely clean
+                new CourseScheduleInfoDto(e.Course.Code, e.Course.Title)))
+            .ToListAsync(ct);
+    }
+
+    public async Task<bool> ExistsAsync(int studentId, string courseCode, CancellationToken ct)
+    {
+        return await context.Enrollments
+            .AsNoTracking()
+            .AnyAsync(e => e.StudentId == studentId && e.Course.Code == courseCode, ct);
+    }
+
+    // 🟢 FIXED FOR M7 EXERCISE 2: Removed the invalid course.EnrollmentCount line
+    public async Task AddAsync(Enrollment enrollment, CancellationToken ct)
+    {
         context.Enrollments.Add(enrollment);
+        
+        // Query course reference to verify its existence securely
+        var course = await context.Courses.FirstOrDefaultAsync(c => c.Id == enrollment.CourseId, ct);
+        if (course is null)
+        {
+            logger.LogWarning("Enrollment failed. Course ID {CourseId} does not exist.", enrollment.CourseId);
+            throw new TmsDatabaseException($"Course with ID '{enrollment.CourseId}' was not found.");
+        }
+        
         await context.SaveChangesAsync(ct);
 
-        logger.LogInformation("Enrolled student {StudentId} into course {CourseId}", request.StudentId, courseId);
-
-        return (await GetByIdAsync(courseId, enrollment.Id, ct))!;
+        logger.LogInformation("Successfully added Student {StudentId} to CourseId {CourseId}", enrollment.StudentId, enrollment.CourseId);
     }
 }
 
