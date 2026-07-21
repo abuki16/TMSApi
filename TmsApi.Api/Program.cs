@@ -1,18 +1,15 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
+using FluentValidation;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using Scalar.AspNetCore;
-using TmsApi.Application.DTOs;
+using TmsApi.Api.Filters;
+using TmsApi.Api.Middlewares;
 using TmsApi.Api.Options;
-using TmsApi.Domain.Entities;
+using TmsApi.Api.Worker;
 using TmsApi.Application.Interfaces;
 using TmsApi.Infrastructure.Persistence;
-using TmsApi.Api;
-using TmsApi.Api.Filters;
-using TmsApi.Api.Worker;
-using TmsApi.Api.Middlewares;
-using FluentValidation;
 using TmsApi.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -54,11 +51,29 @@ builder.Services.AddOpenApi("v1", options => options.AddDocumentTransformer((doc
     document.Info.Title = "TMS API V1";
     return Task.CompletedTask;
 }));
+
 builder.Services.AddOpenApi("v2", options => options.AddDocumentTransformer((document, context, ct) => {
     document.Info.Version = "v2";
     document.Info.Title = "TMS API V2";
     return Task.CompletedTask;
 }));
+
+// Production-only leave commented in lab
+// builder.Services.AddStackExchangeRedisCache(options =>
+// {
+//     options.Configuration = builder.Configuration.GetConnectionString("Redis");
+//     options.InstanceName = "tms:";
+// });
+
+//Register Hybrid Cache
+builder.Services.AddHybridCache(options =>
+{
+options.DefaultEntryOptions = new HybridCacheEntryOptions
+{
+Expiration = TimeSpan.FromMinutes(10),
+LocalCacheExpiration = TimeSpan.FromMinutes(2)
+};
+});
 
 // Domain & Infrastructure Service Registration
 builder.Services.AddScoped<IStudentService, StudentService>();
@@ -67,6 +82,7 @@ builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 builder.Services.AddScoped<IAssessmentService, AssessmentService>();
 builder.Services.AddScoped<IAssessmentResultService, AssessmentResultService>();
 builder.Services.AddScoped<CertificateService>();
+builder.Services.AddScoped<ICachedCourseService, CachedCourseService>();
 
 // Hosted Background Services
 builder.Services.AddSingleton<EnrollmentWorker>();

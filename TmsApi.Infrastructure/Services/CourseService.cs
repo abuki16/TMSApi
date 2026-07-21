@@ -1,4 +1,3 @@
-
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -7,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TmsApi.Application.DTOs;
 using TmsApi.Application.Interfaces;
+using TmsApi.Application.Common;
 using TmsApi.Domain.Entities;
 using TmsApi.Infrastructure.Persistence;
 
@@ -23,8 +23,8 @@ public class CourseService(TmsDbContext context, ILogger<CourseService> logger) 
                 c.Code, 
                 c.Title, 
                 c.MaxCapacity, 
-                c.Enrollments.Count, // 1. Map the integer EnrollmentCount for your controller
-                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList() // 2. Map the collection for M7
+                c.Enrollments.Count,
+                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList()
             )) 
             .FirstOrDefaultAsync(ct);
 
@@ -37,10 +37,23 @@ public class CourseService(TmsDbContext context, ILogger<CourseService> logger) 
                 c.Code, 
                 c.Title, 
                 c.MaxCapacity, 
-                c.Enrollments.Count, // 1. Map the integer EnrollmentCount
-                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList() // 2. Map the collection
+                c.Enrollments.Count,
+                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList()
             )) 
             .FirstOrDefaultAsync(ct);
+
+    public async Task<List<CourseResponseDto>> GetAllAsync(CancellationToken ct) =>
+        await context.Courses
+            .AsNoTracking()
+            .Select(c => new CourseResponseDto(
+                c.Id,
+                c.Code,
+                c.Title,
+                c.MaxCapacity,
+                c.Enrollments.Count,
+                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList()
+            ))
+            .ToListAsync(ct);
 
     public async Task<CourseResponseDto> CreateAsync(CreateCourseRequest request, CancellationToken ct)
     {
@@ -97,8 +110,8 @@ public class CourseService(TmsDbContext context, ILogger<CourseService> logger) 
                 c.Code,
                 c.Title,
                 c.MaxCapacity,
-                c.Enrollments.Count, // 1. Map the integer EnrollmentCount for pagination
-                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList() // 2. Map the collection for pagination
+                c.Enrollments.Count,
+                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList()
             ))
             .ToListAsync(ct);
 

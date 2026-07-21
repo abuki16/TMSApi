@@ -12,7 +12,7 @@ public interface IEnrollmentService
     Task<EnrollmentResponseDto> CreateAsync(int courseId, EnrollStudentRequest request, CancellationToken ct);
     Task<IReadOnlyList<EnrollmentResponseDto>> GetByCourseAsync(int courseId, CancellationToken ct);
 
-    // FOR YOUR CQRS HANDLERS
+    // FOR OUR CQRS HANDLERS
     Task<IEnumerable<EnrollmentResponseDto>> GetByStudentIdAsync(int studentId, CancellationToken ct);
     Task<bool> ExistsAsync(int studentId, string courseCode, CancellationToken ct);
    

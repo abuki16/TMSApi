@@ -14,4 +14,4 @@ public interface IAssessmentService
     Task<IReadOnlyList<AssessmentResponseDto>> GetByCourseAsync(int courseId);
 
     Task<bool> DeleteAssessmentAsync(int id);
-}
+} 

@@ -66,7 +66,6 @@ public class EnrollmentsController(IMediator mediator) : ControllerBase
 }
 
 
-
 // [ApiController]
 // [Route("api/v{version:apiVersion}/enrollments")]
 // [ApiVersion("2.0")]
