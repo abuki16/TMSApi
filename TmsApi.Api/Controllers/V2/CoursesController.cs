@@ -3,7 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TmsApi.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.AspNetCore.RateLimiting;
+using TmsApi.Api.Controllers;
 using TmsApi.Domain.Entities;
+using MediatR;
 
 namespace TmsApi.Api.Controllers.V2;
 
@@ -76,4 +79,5 @@ public class CoursesController : ControllerBase
             }
         });
     }
+
 }

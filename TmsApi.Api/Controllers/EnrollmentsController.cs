@@ -7,11 +7,13 @@ using TmsApi.Application.Enrollments.Commands;
 using TmsApi.Application.Enrollments.Queries;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.RateLimiting;
+using TmsApi.Application.Courses.Queries;
 
 namespace TmsApi.Api.Controllers.V2;
 
 [ApiController]
-[Route("api/v{version:apiVersion}/[controller]")] 
+[Route("api/v{version:apiVersion}/[controller]")]
 [ApiVersion("2.0")]
 [Tags("Enrollments")]
 [Produces("application/problem+json")]
@@ -25,7 +27,7 @@ public class EnrollmentsController(IMediator mediator) : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [EndpointSummary("Enrol a student in a course")]
     public async Task<IActionResult> Enroll(
-        [FromBody] EnrollStudentCommand command, 
+        [FromBody] EnrollStudentCommand command,
         CancellationToken ct)
     {
         var result = await mediator.Send(command, ct);
@@ -57,11 +59,22 @@ public class EnrollmentsController(IMediator mediator) : ControllerBase
     [ProducesResponseType(typeof(ScheduleDto), StatusCodes.Status200OK)]
     [EndpointSummary("Get schedule for a student")]
     public async Task<IActionResult> GetSchedule(
-        [FromRoute] int studentId, 
+        [FromRoute] int studentId,
         CancellationToken ct)
     {
         var schedule = await mediator.Send(new GetStudentScheduleQuery(studentId), ct);
         return Ok(schedule);
+    }
+
+    [HttpGet("search")]
+    [EnableRateLimiting("search")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [EndpointSummary("Search courses")]
+    public async Task<IActionResult> SearchCourses(
+[FromQuery] string? term, CancellationToken ct)
+    {
+        var results = await mediator.Send(new SearchCoursesQuery(term), ct);
+        return Ok(results);
     }
 }
 
@@ -146,84 +159,83 @@ public class EnrollmentsController(IMediator mediator) : ControllerBase
 //         return Ok(schedule);
 //     }
 // }
-    // public async Task<IActionResult> EnrollStudent(int courseId, EnrollStudentRequest request, CancellationToken ct)
-    // {
-    //     if (!ModelState.IsValid) return BadRequest(ModelState);
+// public async Task<IActionResult> EnrollStudent(int courseId, EnrollStudentRequest request, CancellationToken ct)
+// {
+//     if (!ModelState.IsValid) return BadRequest(ModelState);
 
-    //     // 1. Look up the parent course first. If null, return 404 NotFound.
-    //     var course = await courseService.GetByIdAsync(courseId, ct);
-    //     if (course is null)
-    //     {
-    //         return Problem(
-    //             statusCode: StatusCodes.Status404NotFound,
-    //             title: "Course Not Found",
-    //             detail: $"Course with ID {courseId} does not exist."
-    //         );
-    //     }
+//     // 1. Look up the parent course first. If null, return 404 NotFound.
+//     var course = await courseService.GetByIdAsync(courseId, ct);
+//     if (course is null)
+//     {
+//         return Problem(
+//             statusCode: StatusCodes.Status404NotFound,
+//             title: "Course Not Found",
+//             detail: $"Course with ID {courseId} does not exist."
+//         );
+//     }
 
-    //     // 2. Look up the student using ToString() to match the string signature. 
-    //     var student = await studentService.GetByIdAsync(request.StudentId.ToString());
-    //     if (student is null)
-    //     {
-    //         return Problem(
-    //             statusCode: StatusCodes.Status404NotFound,
-    //             title: "Student Not Found",
-    //             detail: $"Student with ID {request.StudentId} does not exist in the system."
-    //         );
-    //     }
+//     // 2. Look up the student using ToString() to match the string signature. 
+//     var student = await studentService.GetByIdAsync(request.StudentId.ToString());
+//     if (student is null)
+//     {
+//         return Problem(
+//             statusCode: StatusCodes.Status404NotFound,
+//             title: "Student Not Found",
+//             detail: $"Student with ID {request.StudentId} does not exist in the system."
+//         );
+//     }
 
-    //     // 3. Prevent duplicate enrollment in the same course
-    //     // Checks the existing enrollments for this course to see if the student is already registered
-    //     var existingEnrollments = await enrollmentService.GetByCourseAsync(courseId, ct);
-        
-    //     // This checks if any existing enrollment item shares the incoming StudentId
-    //     bool isAlreadyEnrolled = false;
-    //     foreach (var item in existingEnrollments)
-    //     {
-    //         if (item.StudentId == request.StudentId)
-    //         {
-    //             isAlreadyEnrolled = true;
-    //             break;
-    //         }
-    //     }
+//     // 3. Prevent duplicate enrollment in the same course
+//     // Checks the existing enrollments for this course to see if the student is already registered
+//     var existingEnrollments = await enrollmentService.GetByCourseAsync(courseId, ct);
 
-    //     if (isAlreadyEnrolled)
-    //     {
-    //         return Problem(
-    //             statusCode: StatusCodes.Status409Conflict,
-    //             title: "Duplicate Enrollment",
-    //             detail: $"Student with ID {request.StudentId} is already enrolled in this course."
-    //         );
-    //     }
+//     // This checks if any existing enrollment item shares the incoming StudentId
+//     bool isAlreadyEnrolled = false;
+//     foreach (var item in existingEnrollments)
+//     {
+//         if (item.StudentId == request.StudentId)
+//         {
+//             isAlreadyEnrolled = true;
+//             break;
+//         }
+//     }
 
-    //     // 4. Check capacity limits next. If full, return 409 Conflict.
-    //     if (course.EnrollmentCount >= course.MaxCapacity)
-    //     {
-    //         return Problem(
-    //             statusCode: StatusCodes.Status409Conflict,
-    //             title: "Course is full",
-    //             detail: $"Course '{course.Title}' has reached its maximum capacity of {course.MaxCapacity}."
-    //         );
-    //     }
+//     if (isAlreadyEnrolled)
+//     {
+//         return Problem(
+//             statusCode: StatusCodes.Status409Conflict,
+//             title: "Duplicate Enrollment",
+//             detail: $"Student with ID {request.StudentId} is already enrolled in this course."
+//         );
+//     }
 
-    //     // 5. Otherwise, safely proceed with creation
-    //     try
-    //     {
-    //         var enrollment = await enrollmentService.CreateAsync(courseId, request, ct);
-            
-    //         return CreatedAtAction(
-    //             nameof(GetEnrollment),
-    //             new { courseId, id = enrollment.Id },
-    //             enrollment);
-    //     }
-    //     catch (InvalidOperationException ex)
-    //     {
-    //         return Problem(
-    //             statusCode: StatusCodes.Status409Conflict,
-    //             title: "Enrollment Failure",
-    //             detail: ex.Message
-    //         );
-    //     }
-    // }
+//     // 4. Check capacity limits next. If full, return 409 Conflict.
+//     if (course.EnrollmentCount >= course.MaxCapacity)
+//     {
+//         return Problem(
+//             statusCode: StatusCodes.Status409Conflict,
+//             title: "Course is full",
+//             detail: $"Course '{course.Title}' has reached its maximum capacity of {course.MaxCapacity}."
+//         );
+//     }
 
-    
+//     // 5. Otherwise, safely proceed with creation
+//     try
+//     {
+//         var enrollment = await enrollmentService.CreateAsync(courseId, request, ct);
+
+//         return CreatedAtAction(
+//             nameof(GetEnrollment),
+//             new { courseId, id = enrollment.Id },
+//             enrollment);
+//     }
+//     catch (InvalidOperationException ex)
+//     {
+//         return Problem(
+//             statusCode: StatusCodes.Status409Conflict,
+//             title: "Enrollment Failure",
+//             detail: ex.Message
+//         );
+//     }
+// }
+
