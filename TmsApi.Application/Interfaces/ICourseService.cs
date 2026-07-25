@@ -19,4 +19,6 @@ public interface ICourseService
     Task UpdateAsync(int id, UpdateCourseRequest request, CancellationToken ct);
     Task<List<CourseResponseDto>> GetAllAsync(CancellationToken ct);
     Task DeleteAsync(int id, CancellationToken ct);
+
+    
 } 
