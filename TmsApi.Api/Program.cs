@@ -205,10 +205,29 @@ builder.Services.AddOptions<PaymentOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAngular", policy =>
+        policy.WithOrigins("http://localhost:4200")
+              .AllowAnyHeader()
+              .AllowAnyMethod());
+});
+
+
 Console.WriteLine("Payments:GatewayUrl = " + builder.Configuration["Payments:GatewayUrl"]);
 Console.WriteLine("Payments:MaxDepositBirr = " + builder.Configuration["Payments:MaxDepositBirr"]);
 
+
 var app = builder.Build();
+
+// Make sure UseCors is placed before authorization/controllers middleware
+app.UseCors("AllowAngular");
+
+
+
+
+
 
 // ==========================================
 // 2. MIDDLEWARE PIPELINE CONFIGURATION
