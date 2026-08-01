@@ -76,6 +76,15 @@ public class EnrollmentsController(IMediator mediator) : ControllerBase
         var results = await mediator.Send(new SearchCoursesQuery(term), ct);
         return Ok(results);
     }
+    // GET /api/v2/enrollments
+    [HttpGet(Name = "GetAllEnrollments")]
+    [ProducesResponseType(typeof(IEnumerable<EnrollmentResponseDto>), StatusCodes.Status200OK)]
+    [EndpointSummary("Get all enrollments")]
+    public async Task<IActionResult> GetAll(CancellationToken ct)
+    {
+        var enrollments = await mediator.Send(new GetEnrollmentsQuery(), ct);
+        return Ok(enrollments);
+    }
 }
 
 
