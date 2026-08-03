@@ -85,6 +85,18 @@ public class EnrollmentsController(IMediator mediator) : ControllerBase
         var enrollments = await mediator.Send(new GetEnrollmentsQuery(), ct);
         return Ok(enrollments);
     }
+    // POST /api/v2/enrollments/{id}/approve
+[HttpPost("{id:int}/approve", Name = "ApproveEnrollment")]
+[ProducesResponseType(StatusCodes.Status200OK)]
+[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+[EndpointSummary("Approve a student enrollment")]
+public async Task<IActionResult> Approve(int id, CancellationToken ct)
+{
+    // Call your mediator command or service to update the enrollment status in the database
+    var result = await mediator.Send(new ApproveEnrollmentCommand(id), ct);
+    
+    return result.IsSuccess ? Ok() : BadRequest(result.Error);
+}
 }
 
 
