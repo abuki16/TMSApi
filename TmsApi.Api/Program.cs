@@ -7,14 +7,17 @@ using Scalar.AspNetCore;
 using TmsApi.Api.Filters;
 using TmsApi.Api.Middlewares;
 using TmsApi.Api.Options;
-using TmsApi.Api.Worker;
+using TmsApi.Infrastructure.Worker;
 using TmsApi.Application.Interfaces;
 using TmsApi.Infrastructure.Persistence;
 using TmsApi.Infrastructure.Services;
+using TmsApi.Application.Transcripts;
+using TmsApi.Infrastructure.Transcripts;
 using System.Threading.RateLimiting; 
 using Microsoft.AspNetCore.Mvc; 
 using Microsoft.AspNetCore.RateLimiting; 
 using TmsApi.Api.RateLimiting; 
+using System.Threading.Channels;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +31,8 @@ builder.Services.AddControllers(options =>
 });
 
 builder.Services.AddHealthChecks();
+
+
 
 // API Versioning Configuration
 builder.Services.AddApiVersioning(options =>
@@ -172,6 +177,16 @@ builder.Services.AddScoped<ICachedCourseService, CachedCourseService>();
 
 // Hosted Background Services
 builder.Services.AddSingleton<EnrollmentWorker>();
+// Transcript servce 
+builder.Services.AddSingleton<ITranscriptStatusStore, InMemoryTranscriptStatusStore>();
+
+builder.Services.AddSingleton(Channel.CreateBounded<TranscriptRequest>(
+new BoundedChannelOptions(100)
+{
+FullMode = BoundedChannelFullMode.Wait
+}));
+
+builder.Services.AddHostedService<TranscriptWorker>();
 
 // Database Context Registration
 builder.Services.AddDbContext<TmsDbContext>(options =>
@@ -422,7 +437,7 @@ using (var scope = app.Services.CreateScope())
     {
         var students = new List<TmsApi.Domain.Entities.Student>
         {
-            new() { RegistrationNumber = "TMS-2026-0001", Name = "Alice Smith", GPA = 3.8m, IsActive = true },
+            new() { RegistrationNumber = "TMS-2026-0001", Name = "Liya Kebede", GPA = 3.8m, IsActive = true },
             new() { RegistrationNumber = "TMS-2026-0002", Name = "Bob Jones", GPA = 2.9m, IsActive = true },
             new() { RegistrationNumber = "TMS-2026-0003", Name = "Charlie Brown", GPA = 3.4m, IsActive = false },
             new() { RegistrationNumber = "TMS-2026-0004", Name = "Diana Prince", GPA = 3.9m, IsActive = true },

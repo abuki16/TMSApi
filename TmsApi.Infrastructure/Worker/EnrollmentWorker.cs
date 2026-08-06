@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using TmsApi.Application.Interfaces;
 using Microsoft.EntityFrameworkCore.Design;
 
-namespace TmsApi.Api.Worker;
+namespace TmsApi.Infrastructure.Worker;
 
 public class EnrollmentWorker(IServiceScopeFactory scopeFactory)
 {
