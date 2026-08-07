@@ -9,6 +9,9 @@ using TmsApi.Api.Middlewares;
 using TmsApi.Api.Options;
 using TmsApi.Infrastructure.Worker;
 using TmsApi.Application.Interfaces;
+using TmsApi.Api.Notifications;
+using TmsApi.Application.Hubs;
+using TmsApi.Application.Notifications;
 using TmsApi.Infrastructure.Persistence;
 using TmsApi.Infrastructure.Services;
 using TmsApi.Application.Transcripts;
@@ -17,6 +20,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Mvc; 
 using Microsoft.AspNetCore.RateLimiting; 
 using TmsApi.Api.RateLimiting; 
+using TmsApi.Api.Hubs;
 using System.Threading.Channels;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,7 +36,7 @@ builder.Services.AddControllers(options =>
 
 builder.Services.AddHealthChecks();
 
-
+builder.Services.AddSignalR();
 
 // API Versioning Configuration
 builder.Services.AddApiVersioning(options =>
@@ -186,6 +190,8 @@ new BoundedChannelOptions(100)
 FullMode = BoundedChannelFullMode.Wait
 }));
 
+builder.Services.AddSingleton<ITranscriptNotificationService, SignalRTranscriptNotificationService>();
+
 builder.Services.AddHostedService<TranscriptWorker>();
 
 // Database Context Registration
@@ -282,6 +288,7 @@ app.UseMiddleware<V1DeprecationMiddleware>();
 
 app.MapControllers();
 
+app.MapHub<TmsHub>("/hubs/tms");
 // ==========================================
 // 3. MINIMAL ENDPOINTS
 // ==========================================

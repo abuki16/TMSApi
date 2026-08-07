@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using TmsApi.Application.Transcripts;
 using TmsApi.Infrastructure.Transcripts;
+using TmsApi.Application.Notifications;
 
 namespace TmsApi.Infrastructure.Worker;
 
@@ -36,7 +37,13 @@ public class TranscriptWorker(
                 var downloadUrl = $"/api/v2/transcripts/{reportId}/download";
                 await statusStore.MarkReadyAsync(reportId, downloadUrl, ct);
                 
-                logger.LogInformation("Transcript ready: {ReportId}", reportId);
+                // Resolve the scoped notification service
+                var notificationService = scope.ServiceProvider.GetRequiredService<ITranscriptNotificationService>();
+                await notificationService.NotifyTranscriptReadyAsync(request.StudentId, reportId, downloadUrl);
+
+                logger.LogInformation(
+                    "Transcript ready, notification sent: {ReportId} for student {StudentId}",
+                    reportId, request.StudentId);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
