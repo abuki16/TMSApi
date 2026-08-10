@@ -9,6 +9,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.RateLimiting;
 using TmsApi.Application.Courses.Queries;
+using Microsoft.AspNetCore.SignalR;
+using TmsApi.Application.Hubs;
+using TmsApi.Api.Hubs;
 
 namespace TmsApi.Api.Controllers.V2;
 
@@ -17,7 +20,9 @@ namespace TmsApi.Api.Controllers.V2;
 [ApiVersion("2.0")]
 [Tags("Enrollments")]
 [Produces("application/problem+json")]
-public class EnrollmentsController(IMediator mediator) : ControllerBase
+public class EnrollmentsController(
+    IMediator mediator,
+    IHubContext<TmsHub, ITmsHubClient> hubContext) : ControllerBase
 {
     // POST /api/v2/enrollments
     [HttpPost(Name = "EnrollStudent")]
@@ -71,11 +76,12 @@ public class EnrollmentsController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     [EndpointSummary("Search courses")]
     public async Task<IActionResult> SearchCourses(
-[FromQuery] string? term, CancellationToken ct)
+        [FromQuery] string? term, CancellationToken ct)
     {
         var results = await mediator.Send(new SearchCoursesQuery(term), ct);
         return Ok(results);
     }
+
     // GET /api/v2/enrollments
     [HttpGet(Name = "GetAllEnrollments")]
     [ProducesResponseType(typeof(IEnumerable<EnrollmentResponseDto>), StatusCodes.Status200OK)]
@@ -85,18 +91,26 @@ public class EnrollmentsController(IMediator mediator) : ControllerBase
         var enrollments = await mediator.Send(new GetEnrollmentsQuery(), ct);
         return Ok(enrollments);
     }
+
     // POST /api/v2/enrollments/{id}/approve
-[HttpPost("{id:int}/approve", Name = "ApproveEnrollment")]
-[ProducesResponseType(StatusCodes.Status200OK)]
-[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-[EndpointSummary("Approve a student enrollment")]
-public async Task<IActionResult> Approve(int id, CancellationToken ct)
-{
-    // Call your mediator command or service to update the enrollment status in the database
-    var result = await mediator.Send(new ApproveEnrollmentCommand(id), ct);
-    
-    return result.IsSuccess ? Ok() : BadRequest(result.Error);
-}
+    [HttpPost("{id:int}/approve", Name = "ApproveEnrollment")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [EndpointSummary("Approve a student enrollment")]
+    public async Task<IActionResult> Approve(int id, CancellationToken ct)
+    {
+        var result = await mediator.Send(new ApproveEnrollmentCommand(id), ct);
+        
+        if (!result.IsSuccess)
+        {
+            return BadRequest(result.Error);
+        }
+
+        // Broadcast the real-time status update to all connected Angular clients
+        await hubContext.Clients.All.ReceiveEnrollmentStatusUpdated(id.ToString(), "Approved");
+
+        return Ok();
+    }
 }
 
 

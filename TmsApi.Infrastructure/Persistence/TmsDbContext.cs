@@ -12,11 +12,12 @@ public class TmsDbContext(DbContextOptions<TmsDbContext> options) : DbContext(op
     public DbSet<Assessment> Assessments => Set<Assessment>();
     public DbSet<AssessmentResult> AssessmentResults => Set<AssessmentResult>();
     public DbSet<Certificate> Certificates => Set<Certificate>();
-    
-protected override void OnModelCreating(ModelBuilder modelBuilder)
-{
-    base.OnModelCreating(modelBuilder);
-    
+    public DbSet<Grade> Grades => Set<Grade>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
     modelBuilder.ApplyConfigurationsFromAssembly(typeof(TmsDbContext).Assembly);
 
     modelBuilder.Entity<Student>().Property<DateTime>("LastUpdated");
