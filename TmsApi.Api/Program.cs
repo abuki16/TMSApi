@@ -234,6 +234,24 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader()
               .AllowAnyMethod());
 });
+// Load allowed origins from appsettings.Development.json
+var allowedOrigins = builder.Configuration
+    .GetSection("AllowedOrigins").Get<string[]>()
+    ?? ["http://localhost:4200"];
+
+// Register the CORS policy in the Dependency Injection container
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("TmsClient", policy =>
+    {
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials() // Vital for HttpOnly auth cookies in Session 2
+              .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+    });
+});
+
 
 
 Console.WriteLine("Payments:GatewayUrl = " + builder.Configuration["Payments:GatewayUrl"]);
@@ -243,11 +261,10 @@ Console.WriteLine("Payments:MaxDepositBirr = " + builder.Configuration["Payments
 var app = builder.Build();
 
 // Make sure UseCors is placed before authorization/controllers middleware
-app.UseCors("AllowAngular");
 
+// app.UseCors("AllowAngular");
 
-
-
+app.UseCors("TmsClient");
 
 
 // ==========================================
