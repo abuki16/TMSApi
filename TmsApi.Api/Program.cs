@@ -22,6 +22,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using TmsApi.Api.RateLimiting; 
 using TmsApi.Api.Hubs;
 using System.Threading.Channels;
+using Microsoft.AspNetCore.Antiforgery;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,6 +61,11 @@ builder.Services.AddApiVersioning(options =>
 // ProblemDetails and Global Exception Handling Framework
 builder.Services.AddExceptionHandler<TmsApi.Api.ExceptionHandlers.GlobalExceptionHandler>();
 builder.Services.AddProblemDetails(); 
+
+builder.Services.AddAntiforgery(options =>
+{
+options.HeaderName = "X-XSRF-TOKEN";
+});
 
 // OpenAPI / Swagger Configuration for Multiple API Versions
 builder.Services.AddOpenApi("v1", options => options.AddDocumentTransformer((document, context, ct) => {
@@ -294,6 +300,25 @@ app.MapHealthChecks("/health/ready").DisableRateLimiting();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.Use(async (context, next) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true || context.Request.Cookies.ContainsKey("tms_auth"))
+    {
+        var antiforgery = context.RequestServices
+            .GetRequiredService<Microsoft.AspNetCore.Antiforgery.IAntiforgery>();
+        var tokens = antiforgery.GetAndStoreTokens(context);
+        
+        context.Response.Cookies.Append("XSRF-TOKEN", tokens.RequestToken!,
+            new CookieOptions
+            {
+                HttpOnly = false, // MUST be false so Angular JavaScript can read it!
+                Secure = !builder.Environment.IsDevelopment(),
+                SameSite = SameSiteMode.Strict
+            });
+    }
+    await next(context);
+});
 
 if (app.Environment.IsDevelopment())
 {
