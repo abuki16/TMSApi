@@ -320,6 +320,7 @@ app.Use(async (context, next) =>
     await next(context);
 });
 
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -330,7 +331,7 @@ app.UseMiddleware<V1DeprecationMiddleware>();
 
 app.MapControllers();
 
-app.MapHub<TmsHub>("/hubs/tms");
+app.MapHub<TmsHub>("/hubs/tms").RequireCors("TmsClient");
 // ==========================================
 // 3. MINIMAL ENDPOINTS
 // ==========================================

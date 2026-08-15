@@ -3,9 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using TmsApi.Application.Behaviors;
 using TmsApi.Application.DTOs;
 
+
 namespace TmsApi.Api.Controllers;
 [ApiController]
-[Route("api/{version:apiVersion}/auth")]
+[Route("api/{version:apiVersion}/auth")] 
 public class AuthController : ControllerBase
 {
     [HttpPost("login")]
@@ -55,14 +56,14 @@ public class AuthController : ControllerBase
         return Unauthorized(new { detail = "Session expired or missing authentication cookie." });
     }
 
-    [HttpPost("logout")]
-    public IActionResult Logout()
-    {
-        Response.Cookies.Delete("tms_auth");
-        Response.Cookies.Delete("XSRF-TOKEN");
+    // [HttpPost("logout")]
+    // public IActionResult Logout()
+    // {
+    //     Response.Cookies.Delete("tms_auth");
+    //     Response.Cookies.Delete("XSRF-TOKEN");
         
-        return Ok(new { message = "Logged out successfully." });
-    }
+    //     return Ok(new { message = "Logged out successfully." });
+    // }
 }
 
 
