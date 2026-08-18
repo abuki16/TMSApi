@@ -10,19 +10,19 @@ using TmsApi.Api.Options;
 using TmsApi.Infrastructure.Worker;
 using TmsApi.Application.Interfaces;
 using TmsApi.Api.Notifications;
-using TmsApi.Application.Hubs;
 using TmsApi.Application.Notifications;
 using TmsApi.Infrastructure.Persistence;
 using TmsApi.Infrastructure.Services;
 using TmsApi.Application.Transcripts;
 using TmsApi.Infrastructure.Transcripts;
-using System.Threading.RateLimiting; 
-using Microsoft.AspNetCore.Mvc; 
-using Microsoft.AspNetCore.RateLimiting; 
-using TmsApi.Api.RateLimiting; 
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using TmsApi.Api.RateLimiting;
 using TmsApi.Api.Hubs;
 using System.Threading.Channels;
-using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Identity;
+using TmsApi.Infrastructure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -159,6 +159,23 @@ ProblemDetails
 });
 }); 
 
+
+builder.Services.AddIdentityCore<TmsUser>(options =>
+{
+    // Enterprise Password Policy
+    options.Password.RequiredLength = 12;
+    options.Password.RequireUppercase = true;
+    options.Password.RequireDigit = true;
+    options.Password.RequireNonAlphanumeric = true;
+
+    // Brute-Force Lockout Protection
+    options.Lockout.MaxFailedAccessAttempts = 5;
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+    options.Lockout.AllowedForNewUsers = true;
+})
+.AddRoles<IdentityRole>()
+.AddEntityFrameworkStores<TmsDbContext>();
+
 // Production-only leave commented in lab
 // builder.Services.AddStackExchangeRedisCache(options =>
 // {
@@ -270,7 +287,7 @@ var app = builder.Build();
 
 // app.UseCors("AllowAngular");
 
-app.UseCors("TmsClient");
+
 
 
 // ==========================================
@@ -293,6 +310,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseRouting();
+
+app.UseCors("TmsClient");
 
 app.UseRateLimiter();
 app.MapHealthChecks("/health/live").DisableRateLimiting();
@@ -319,7 +338,6 @@ app.Use(async (context, next) =>
     }
     await next(context);
 });
-
 
 if (app.Environment.IsDevelopment())
 {
