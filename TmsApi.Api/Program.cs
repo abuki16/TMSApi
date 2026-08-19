@@ -339,10 +339,15 @@ app.Use(async (context, next) =>
     await next(context);
 });
 
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    app.MapScalarApiReference();
+    app.MapScalarApiReference(options =>
+    {
+        options.WithTitle("TMS API")
+               .WithOpenApiRoutePattern("/openapi/v1.json");
+    });
 }
 
 app.UseMiddleware<V1DeprecationMiddleware>();
