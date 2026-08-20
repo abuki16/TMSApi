@@ -23,6 +23,9 @@ using TmsApi.Api.Hubs;
 using System.Threading.Channels;
 using Microsoft.AspNetCore.Identity;
 using TmsApi.Infrastructure.Identity;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -231,9 +234,34 @@ builder.Services.AddValidatorsFromAssembly(typeof(TmsApi.Application.Enrollments
 builder.Services.AddTransient(typeof(MediatR.IPipelineBehavior<,>), typeof(TmsApi.Application.Behaviors.LoggingBehavior<,>));
 builder.Services.AddTransient(typeof(MediatR.IPipelineBehavior<,>), typeof(TmsApi.Application.Behaviors.ValidationBehavior<,>));
 
-// Authentication and Security
-builder.Services.AddAuthentication("Training")
-    .AddScheme<AuthenticationSchemeOptions, TrainingAuthHandler>("Training", null);
+// // Authentication and Security
+// builder.Services.AddAuthentication("Training")
+//     .AddScheme<AuthenticationSchemeOptions, TrainingAuthHandler>("Training", null);
+// 1. Register TokenService dependency injection
+builder.Services.AddScoped<TokenService>();
+
+// 2. Configure Authentication with multiple schemes
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+    };
+})
+.AddScheme<AuthenticationSchemeOptions, TrainingAuthHandler>("Training", null);
 
 builder.Services.AddAuthorization();
 

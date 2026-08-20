@@ -17,6 +17,7 @@ public class TmsDbContext(DbContextOptions<TmsDbContext> options) : IdentityDbCo
     public DbSet<AssessmentResult> AssessmentResults => Set<AssessmentResult>();
     public DbSet<Certificate> Certificates => Set<Certificate>();
     public DbSet<Grade> Grades => Set<Grade>();
+    public DbSet<RefreshToken> RefreshTokens { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
