@@ -1,31 +1,33 @@
+using System.Text;
+using System.Threading.Channels;
+using System.Threading.RateLimiting;
 using Asp.Versioning;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Hybrid;
-using Scalar.AspNetCore;
-using TmsApi.Api.Filters;
-using TmsApi.Api.Middlewares;
-using TmsApi.Api.Options;
-using TmsApi.Infrastructure.Worker;
-using TmsApi.Application.Interfaces;
-using TmsApi.Api.Notifications;
-using TmsApi.Application.Notifications;
-using TmsApi.Infrastructure.Persistence;
-using TmsApi.Infrastructure.Services;
-using TmsApi.Application.Transcripts;
-using TmsApi.Infrastructure.Transcripts;
-using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using TmsApi.Api.RateLimiting;
-using TmsApi.Api.Hubs;
-using System.Threading.Channels;
-using Microsoft.AspNetCore.Identity;
-using TmsApi.Infrastructure.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using System.Text;
+using Scalar.AspNetCore;
+using TmsApi.Api.Authorization;
+using TmsApi.Api.Filters;
+using TmsApi.Api.Hubs;
+using TmsApi.Api.Middlewares;
+using TmsApi.Api.Notifications;
+using TmsApi.Api.Options;
+using TmsApi.Api.RateLimiting;
+using TmsApi.Application.Interfaces;
+using TmsApi.Application.Notifications;
+using TmsApi.Application.Transcripts;
+using TmsApi.Infrastructure.Identity;
+using TmsApi.Infrastructure.Persistence;
+using TmsApi.Infrastructure.Services;
+using TmsApi.Infrastructure.Transcripts;
+using TmsApi.Infrastructure.Worker;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -83,7 +85,7 @@ builder.Services.AddOpenApi("v2", options => options.AddDocumentTransformer((doc
     return Task.CompletedTask;
 }));
 
- //  
+ // 
 builder.Services.AddRateLimiter(options => 
 { 
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, 
@@ -159,6 +161,12 @@ ProblemDetails
     opt.TokensPerPeriod = 5;                 // Refill amount
     opt.ReplenishmentPeriod = TimeSpan.FromSeconds(10); // Refill interval
     opt.QueueLimit = 2;                      // Small queue for overflow
+});
+   options.AddFixedWindowLimiter("AuthLimiter", opt =>
+{
+    opt.PermitLimit = 5;
+    opt.Window = TimeSpan.FromMinutes(1);
+    opt.QueueLimit = 0;
 });
 }); 
 
@@ -265,11 +273,18 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("CanEditCourse", policy =>
+        policy.Requirements.Add(new CourseInstructorRequirement()));
+
+builder.Services.AddSingleton<IAuthorizationHandler, CourseInstructorHandler>();
+
 builder.Host.UseDefaultServiceProvider(options =>
 {
     options.ValidateScopes = true;
     options.ValidateOnBuild = true;
 });
+
 
 // Options Validation on Startup
 builder.Services.AddOptions<PaymentOptions>()
@@ -342,6 +357,20 @@ app.UseRouting();
 app.UseCors("TmsClient");
 
 app.UseRateLimiter();
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("X-Frame-Options", "DENY");
+    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    
+    // Updated CSP to allow external fonts and API calls needed by Scalar UI
+    context.Response.Headers.Append(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' https: data:; connect-src 'self' https://api.scalar.com;"
+    );
+    
+    await next();
+});
 app.MapHealthChecks("/health/live").DisableRateLimiting();
 app.MapHealthChecks("/health/ready").DisableRateLimiting();
 

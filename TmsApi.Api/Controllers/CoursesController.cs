@@ -5,18 +5,22 @@ using Microsoft.AspNetCore.Routing;
 using TmsApi.Application.Interfaces;
 using TmsApi.Application.DTOs;
 using System.Collections.Generic;
-using Microsoft.EntityFrameworkCore.Design;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization; // Required for Authorize and IAuthorizationService
 
 namespace TmsApi.Api.Controllers;
 
+[Authorize(Roles = "Instructor, Admin")] 
 [ApiController]
 [Route("api/courses")]
 [Tags("Courses")]
 [Produces("application/json")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
-public class CoursesController(ICourseService courseService, LinkGenerator linkGenerator) : ControllerBase
+public class CoursesController(
+    ICourseService courseService, 
+    LinkGenerator linkGenerator,
+    IAuthorizationService authorizationService) : ControllerBase // Injected IAuthorizationService[cite: 1]
 {
     // Action 1: GET /api/courses (Paginated List)
     [HttpGet]
@@ -40,7 +44,6 @@ public class CoursesController(ICourseService courseService, LinkGenerator linkG
         var course = await courseService.GetByIdAsync(id, ct);
         if (course is null) return NotFound();
 
-        // Safe dynamic link creation
         var selfPath = linkGenerator.GetPathByName(HttpContext, nameof(GetCourseById), new { id });
         var enrollmentsPath = linkGenerator.GetPathByName(HttpContext, "ListCourseEnrollments", new { courseId = id });
 
@@ -52,7 +55,6 @@ public class CoursesController(ICourseService courseService, LinkGenerator linkG
             new(enrollmentsPath ?? "", "enrollments", "GET")
         };
 
-        // Apply conditional HATEOAS constraint checking course capacity
         if (course.EnrollmentCount < course.MaxCapacity)
         {
             links.Add(new LinkDto(enrollmentsPath ?? "", "enroll", "POST"));
@@ -98,16 +100,24 @@ public class CoursesController(ICourseService courseService, LinkGenerator linkG
     // Action 4: PUT /api/courses/{id}
     [HttpPut("{id:int}", Name = nameof(UpdateCourse))]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)] // Added 403 response type
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [EndpointSummary("Update an existing course")]
-    [EndpointDescription("Updates structural properties of a course. Fails if the new code conflicts with an existing one.")]
+    [EndpointDescription("Updates structural properties of a course. Fails if the new code conflicts or user lacks ownership.")]
     public async Task<IActionResult> UpdateCourse(int id, [FromBody] UpdateCourseRequest request, CancellationToken ct)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         var existingCourse = await courseService.GetByIdAsync(id, ct);
         if (existingCourse is null) return NotFound();
+
+        // Evaluate Resource-Based Authorization Policy ("CanEditCourse")[cite: 1]
+        var authResult = await authorizationService.AuthorizeAsync(User, existingCourse, "CanEditCourse");
+        if (!authResult.Succeeded)
+        {
+            return Forbid(); // Returns 403 Forbidden if caller doesn't own the course or isn't admin[cite: 1]
+        }
 
         if (existingCourse.Code != request.Code && await courseService.CodeExistsAsync(request.Code, ct))
         {

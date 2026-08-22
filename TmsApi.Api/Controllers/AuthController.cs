@@ -6,9 +6,12 @@ using TmsApi.Domain.Entities;
 using TmsApi.Infrastructure.Persistence;
 using TmsApi.Infrastructure.Identity;
 using TmsApi.Infrastructure.Services;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
+
 
 namespace TmsApi.Api.Controllers;
-
+[EnableRateLimiting("AuthLimiter")]
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/auth")]
@@ -75,7 +78,8 @@ public class AuthController : ControllerBase
     }
 
     public record LoginRequest(string Email, string Password);
-
+     
+    [EnableRateLimiting("AuthLimiter")]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
