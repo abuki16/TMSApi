@@ -558,10 +558,28 @@ app.MapGet("/api/students/all-with-deleted", async (TmsDbContext db) =>
 });
 
 // Runtime Migrations & Data Seeding
+// using (var scope = app.Services.CreateScope())
+// {
+//     var context = scope.ServiceProvider.GetRequiredService<TmsDbContext>();
+//     context.Database.Migrate();
+
+//     if (!context.Students.Any())
+//     {
+
+// Runtime Migrations & Data Seeding
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<TmsDbContext>();
-    context.Database.Migrate();
+    
+    // Only call Migrate if using a relational database; use EnsureCreated for InMemory tests
+    if (context.Database.IsRelational())
+    {
+        context.Database.Migrate();
+    }
+    else
+    {
+        context.Database.EnsureCreated();
+    }
 
     if (!context.Students.Any())
     {
@@ -597,3 +615,5 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+public partial class Program { }
