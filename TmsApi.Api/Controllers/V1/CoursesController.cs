@@ -1,9 +1,9 @@
 using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using TmsApi.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore.Design;
 using TmsApi.Domain.Entities;
+using TmsApi.Infrastructure.Persistence;
 
 namespace TmsApi.Api.Controllers.V1;
 
@@ -20,6 +20,7 @@ public class CoursesController : ControllerBase
     }
 
     [HttpGet]
+
     public async Task<IActionResult> GetCourses(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -58,4 +59,88 @@ public class CoursesController : ControllerBase
             hasPrevious = page > 1
         });
     }
+
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> GetCourseById(int id, CancellationToken ct)
+    {
+        var course = await _context.Courses
+            .AsNoTracking()
+            .Where(c => c.Id == id)
+            .Select(c => new
+            {
+                c.Id,
+                c.Code,
+                c.Title,
+                c.MaxCapacity,
+                EnrollmentCount = c.Enrollments.Count
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (course is null) return NotFound();
+
+        return Ok(course);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> CreateCourse([FromBody] Course model, CancellationToken ct)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var exists = await _context.Courses.AnyAsync(c => c.Code == model.Code, ct);
+        if (exists)
+        {
+            return Conflict(new { message = $"A course with code '{model.Code}' already exists." });
+        }
+
+        _context.Courses.Add(model);
+        await _context.SaveChangesAsync(ct);
+
+        return CreatedAtAction(nameof(GetCourseById), new { version = "1.0", id = model.Id }, model);
+    }
+
+    [HttpPut("{id:int}")]
+public async Task<IActionResult> UpdateCourse(int id, [FromBody] Course model, CancellationToken ct)
+{
+    var existing = await _context.Courses.FindAsync(new object[] { id }, ct);
+    if (existing is null) return NotFound();
+
+    // Check if another course already uses this code
+    var codeExists = await _context.Courses
+        .AnyAsync(c => c.Code == model.Code && c.Id != id, ct);
+        
+    if (codeExists)
+    {
+        return Conflict(new { message = $"A course with code '{model.Code}' already exists." });
+    }
+
+    existing.Code = model.Code;
+    existing.Title = model.Title;
+    existing.MaxCapacity = model.MaxCapacity;
+
+    await _context.SaveChangesAsync(ct);
+    return Ok(new { message = "Course updated successfully." });
+}
+    [HttpDelete("{id:int}")]
+public async Task<IActionResult> DeleteCourse(int id, CancellationToken ct)
+{
+    var existing = await _context.Courses
+        .Include(c => c.Enrollments)
+        .FirstOrDefaultAsync(c => c.Id == id, ct);
+
+    if (existing is null) return NotFound();
+
+    // Check if there are active enrollments linked to this course
+    if (existing.Enrollments.Any())
+    {
+        return Conflict(new 
+        { 
+            message = "Cannot delete this course because there are active student enrollments associated with it." 
+        });
+    }
+
+    _context.Courses.Remove(existing);
+    await _context.SaveChangesAsync(ct);
+    
+    return Ok(new { message = "Course deleted successfully." });
+}
 }

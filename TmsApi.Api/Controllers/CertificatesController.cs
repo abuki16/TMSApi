@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using TmsApi.Application.DTOs;
 using TmsApi.Application.Interfaces;
-using Microsoft.EntityFrameworkCore.Design;
 using TmsApi.Infrastructure.Services;
+
 namespace TmsApi.Api.Controllers;
 
 [ApiController]
@@ -21,24 +21,32 @@ public class CertificatesController : ControllerBase
 
     [HttpPost]
     [ProducesResponseType(typeof(CertificateResponseDto), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [EndpointSummary("Issue a new certificate")]
     [EndpointDescription("Registers an academic certificate. HATEOAS links are omitted from this initial response.")]
     public async Task<IActionResult> Issue([FromBody] IssueCertificateRequest request)
     {
-        var result = await _certificateService.IssueCertificateAsync(request);
-        if (result == null)
+        try
         {
-            return BadRequest("Could not issue certificate. Ensure the student and course exist, and the serial number is unique.");
+            var result = await _certificateService.IssueCertificateAsync(request);
+            
+            // Fixed: Use CreatedAtAction pointing to GetById method safely
+            return CreatedAtAction(nameof(GetById), new { id = result!.Id }, result);
         }
-
-        // The 'Links' property remains null on creation, so it is completely omitted from the JSON payload.
-        return CreatedAtRoute("GetCertificateById", new { id = result.Id }, result);
+        catch (InvalidOperationException ex)
+        {
+            // Returns a 400 Bad Request with the specific duplicate message
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            // Returns a 404 Not Found if the student or course is missing
+            return NotFound(new { message = ex.Message });
+        }
     }
 
-   [HttpGet("{id:int}", Name = nameof(GetById))]
+    [HttpGet("{id:int}", Name = "GetCertificateById")]
     [ProducesResponseType(typeof(CertificateResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [EndpointSummary("Get certificate by ID")]
@@ -48,9 +56,8 @@ public class CertificatesController : ControllerBase
         var certificate = await _certificateService.GetByIdAsync(id);
         if (certificate == null) return NotFound();
 
-        // Populate links exclusively for GET requests
         var certificateWithLinks = PopulateLinks(certificate);
-        return Ok(certificate);
+        return Ok(certificateWithLinks);
     }
 
     [HttpGet("student/{studentId}")]
@@ -60,13 +67,10 @@ public class CertificatesController : ControllerBase
     public async Task<IActionResult> GetByStudent(int studentId)
     {
         var certificates = await _certificateService.GetByStudentIdAsync(studentId);
-        
-        // Map over the results to populate links for each certificate in the list
         var certificatesWithLinks = certificates.Select(PopulateLinks).ToList();
         
         return Ok(certificatesWithLinks);
     }
-
     
     [HttpDelete("{id}", Name = "RevokeCertificate")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -81,7 +85,6 @@ public class CertificatesController : ControllerBase
         return NoContent();
     }
 
-    // Helper method using C# 'with' expression for safe, immutable copy mutation
     private CertificateResponseDto PopulateLinks(CertificateResponseDto dto)
     {
         var links = new List<LinkDto>
@@ -91,5 +94,5 @@ public class CertificatesController : ControllerBase
         };
 
         return dto with { Links = links };
-    }
+    }  
 }

@@ -9,8 +9,8 @@ using TmsApi.Infrastructure.Services;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 
-
 namespace TmsApi.Api.Controllers;
+
 [EnableRateLimiting("AuthLimiter")]
 [ApiController]
 [ApiVersion("1.0")]
@@ -47,7 +47,6 @@ public class AuthController : ControllerBase
         var existingUser = await _userManager.FindByEmailAsync(request.Email);
         if (existingUser != null)
         {
-            // Prevent account enumeration by returning a generic response
             return Ok(new { message = "Registration request received." });
         }
 
@@ -66,7 +65,6 @@ public class AuthController : ControllerBase
             return BadRequest(new { errors });
         }
 
-        // Ensure requested role exists
         if (!await _roleManager.RoleExistsAsync(request.Role))
         {
             await _roleManager.CreateAsync(new IdentityRole(request.Role));
@@ -101,13 +99,11 @@ public class AuthController : ControllerBase
             return Unauthorized(new { detail = "Invalid credentials." });
         }
 
-        // Reset failed attempt counter on successful login
         await _userManager.ResetAccessFailedCountAsync(user);
 
         var roles = await _userManager.GetRolesAsync(user);
         var accessToken = _tokenService.GenerateJwt(user, roles);
 
-        // Issue initial Refresh Token
         var refreshToken = new RefreshToken
         {
             Token = Guid.NewGuid().ToString("N"),
@@ -140,7 +136,6 @@ public class AuthController : ControllerBase
             return Unauthorized(new { detail = "Invalid refresh token." });
         }
 
-        // Theft Detection: If an ALREADY-USED token is submitted, revoke ALL tokens for this user!
         if (storedToken.IsUsed)
         {
             var userTokens = await _context.RefreshTokens
@@ -161,10 +156,8 @@ public class AuthController : ControllerBase
             return Unauthorized(new { detail = "Refresh token expired or revoked." });
         }
 
-        // Mark current token as used
         storedToken.IsUsed = true;
 
-        // Issue brand-new Refresh Token pair[cite: 1]
         var newRefreshToken = new RefreshToken
         {
             Token = Guid.NewGuid().ToString("N"),
@@ -186,5 +179,71 @@ public class AuthController : ControllerBase
             accessToken = newAccessToken,
             refreshToken = newRefreshToken.Token
         });
+    }
+
+    // ==========================================
+    // User Management Endpoints (List, Update & Delete)
+    // ==========================================
+
+    [HttpGet("users")]
+    public async Task<IActionResult> GetAllUsers()
+    {
+        var users = await _userManager.Users
+            .Select(u => new
+            {
+                u.Id,
+                u.Email,
+                u.FirstName,
+                u.LastName,
+                u.UserName
+            })
+            .ToListAsync();
+
+        return Ok(users);
+    }
+
+    public record UpdateUserRequest(string Email, string FirstName, string LastName, string UserName);
+
+    [HttpPut("users/{id}")]
+    public async Task<IActionResult> UpdateUser(string id, [FromBody] UpdateUserRequest request)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user == null)
+        {
+            return NotFound(new { message = "User not found." });
+        }
+
+        user.Email = request.Email;
+        user.FirstName = request.FirstName;
+        user.LastName = request.LastName;
+        user.UserName = request.UserName;
+
+        var result = await _userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            var errors = result.Errors.Select(e => e.Description);
+            return BadRequest(new { errors });
+        }
+
+        return NoContent();
+    }
+
+    [HttpDelete("users/{id}")]
+    public async Task<IActionResult> DeleteUser(string id)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user == null)
+        {
+            return NotFound(new { message = "User not found." });
+        }
+
+        var result = await _userManager.DeleteAsync(user);
+        if (!result.Succeeded)
+        {
+            var errors = result.Errors.Select(e => e.Description);
+            return BadRequest(new { errors });
+        }
+
+        return NoContent();
     }
 }
