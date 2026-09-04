@@ -10,6 +10,9 @@ using TmsApi.Application.DTOs;
 using TmsApi.Domain.Entities;
 using TmsApi.Infrastructure.Services;
 
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+
 namespace TmsApi.Api.Controllers;
 
 public record CreateStudentRequest(int Id, string Name, int Age, decimal GPA);
@@ -20,6 +23,92 @@ public record UpdateStudentRequest(string Name, int Age, decimal GPA, uint Versi
 // Injecting TmsDbContext directly into the primary constructor here
 public class StudentsController(IStudentService studentService, TmsDbContext context) : ControllerBase
 {
+    [HttpGet("me")]
+    [Authorize]
+    public async Task<IActionResult> GetCurrentStudent(CancellationToken ct)
+    {
+        var email = User.FindFirstValue(ClaimTypes.Email);
+        var name = User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue("displayName") ?? User.FindFirstValue("FirstName");
+        var sidClaim = User.FindFirstValue("studentId") ?? User.FindFirstValue(ClaimTypes.Sid);
+
+        Student? student = null;
+        if (int.TryParse(sidClaim, out var sId))
+        {
+            student = await context.Students
+                .Include(s => s.Enrollments)
+                    .ThenInclude(e => e.Course)
+                .FirstOrDefaultAsync(s => s.Id == sId, ct);
+        }
+
+        if (student == null && !string.IsNullOrWhiteSpace(name))
+        {
+            student = await context.Students
+                .Include(s => s.Enrollments)
+                    .ThenInclude(e => e.Course)
+                .FirstOrDefaultAsync(s => s.Name.ToLower() == name.ToLower(), ct);
+        }
+
+        if (student == null)
+        {
+            var studentName = !string.IsNullOrWhiteSpace(name) ? name : (email ?? "Student");
+            var count = await context.Students.IgnoreQueryFilters().CountAsync(ct);
+            student = new Student
+            {
+                Name = studentName,
+                RegistrationNumber = $"TMS-{DateTime.UtcNow.Year}-{(count + 1):D4}",
+                GPA = 3.8m,
+                IsActive = true
+            };
+            context.Students.Add(student);
+            await context.SaveChangesAsync(ct);
+        }
+
+        // Calculate progress: each non-rejected enrolled course contributes 3 credits to baseline 45
+        var activeEnrollments = student.Enrollments.Where(e => e.Status != "Rejected").ToList();
+        var earnedCredits = 45 + (activeEnrollments.Count * 3);
+        var isGraduationEligible = earnedCredits >= 120;
+
+        // Fetch any academic certificates issued to this student
+        var certificates = await context.Certificates
+            .AsNoTracking()
+            .Include(c => c.Course)
+            .Where(c => c.StudentId == student.Id)
+            .Select(c => new
+            {
+                id = c.Id,
+                serialNumber = c.SerialNumber,
+                courseId = c.CourseId,
+                courseTitle = c.Course != null ? c.Course.Title : "Course #" + c.CourseId,
+                issuedAt = c.IssuedAt
+            })
+            .ToListAsync(ct);
+
+        return Ok(new
+        {
+            id = student.Id,
+            name = student.Name,
+            registrationNumber = student.RegistrationNumber,
+            gpa = student.GPA,
+            earnedCredits = earnedCredits,
+            graduationStatus = isGraduationEligible ? "Eligible for Graduation" : "In Progress",
+            isGraduationEligible = isGraduationEligible,
+            enrollments = student.Enrollments.Select(e => new
+            {
+                id = e.Id,
+                courseId = e.CourseId,
+                courseCode = e.Course?.Code ?? "",
+                courseName = e.Course?.Title ?? "",
+                status = e.Status,
+                completionStatus = e.Grade != null ? "Completed" : (e.Status == "Approved" ? "Approved" : e.Status),
+                isCompleted = e.Grade != null,
+                isApproved = e.Status == "Approved",
+                enrolledAt = e.EnrolledAt,
+                grade = e.Grade
+            }),
+            certificates = certificates
+        });
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {

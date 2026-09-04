@@ -72,6 +72,27 @@ public class AuthController : ControllerBase
 
         await _userManager.AddToRoleAsync(user, request.Role);
 
+        if (request.Role == "Student")
+        {
+            var studentName = $"{request.FirstName} {request.LastName}".Trim();
+            if (string.IsNullOrWhiteSpace(studentName)) studentName = request.Email;
+
+            var existingStudent = await _context.Students.FirstOrDefaultAsync(s => s.Name.ToLower() == studentName.ToLower());
+            if (existingStudent == null)
+            {
+                var count = await _context.Students.IgnoreQueryFilters().CountAsync();
+                var newStudent = new Student
+                {
+                    Name = studentName,
+                    RegistrationNumber = $"TMS-{DateTime.UtcNow.Year}-{(count + 1):D4}",
+                    GPA = 3.5m,
+                    IsActive = true
+                };
+                _context.Students.Add(newStudent);
+                await _context.SaveChangesAsync();
+            }
+        }
+
         return Ok(new { message = "Registration successful." });
     }
 
@@ -102,7 +123,30 @@ public class AuthController : ControllerBase
         await _userManager.ResetAccessFailedCountAsync(user);
 
         var roles = await _userManager.GetRolesAsync(user);
-        var accessToken = _tokenService.GenerateJwt(user, roles);
+        var fullName = $"{user.FirstName} {user.LastName}".Trim();
+        if (string.IsNullOrWhiteSpace(fullName)) fullName = user.UserName ?? user.Email ?? "User";
+
+        int? studentId = null;
+        if (roles.Contains("Student"))
+        {
+            var student = await _context.Students.FirstOrDefaultAsync(s => s.Name.ToLower() == fullName.ToLower());
+            if (student == null)
+            {
+                var count = await _context.Students.IgnoreQueryFilters().CountAsync();
+                student = new Student
+                {
+                    Name = fullName,
+                    RegistrationNumber = $"TMS-{DateTime.UtcNow.Year}-{(count + 1):D4}",
+                    GPA = 3.8m,
+                    IsActive = true
+                };
+                _context.Students.Add(student);
+                await _context.SaveChangesAsync();
+            }
+            studentId = student.Id;
+        }
+
+        var accessToken = _tokenService.GenerateJwt(user, roles, studentId, fullName);
 
         var refreshToken = new RefreshToken
         {
@@ -119,7 +163,18 @@ public class AuthController : ControllerBase
         return Ok(new
         {
             accessToken,
-            refreshToken = refreshToken.Token
+            refreshToken = refreshToken.Token,
+            user = new
+            {
+                id = user.Id,
+                email = user.Email,
+                displayName = fullName,
+                firstName = user.FirstName,
+                lastName = user.LastName,
+                role = roles.FirstOrDefault() ?? "Student",
+                roles,
+                studentId
+            }
         });
     }
 
@@ -172,12 +227,33 @@ public class AuthController : ControllerBase
 
         var user = await _userManager.FindByIdAsync(storedToken.UserId);
         var roles = await _userManager.GetRolesAsync(user!);
-        var newAccessToken = _tokenService.GenerateJwt(user!, roles);
+        var fullName = $"{user!.FirstName} {user.LastName}".Trim();
+        if (string.IsNullOrWhiteSpace(fullName)) fullName = user.UserName ?? user.Email ?? "User";
+
+        int? studentId = null;
+        if (roles.Contains("Student"))
+        {
+            var student = await _context.Students.FirstOrDefaultAsync(s => s.Name.ToLower() == fullName.ToLower());
+            studentId = student?.Id;
+        }
+
+        var newAccessToken = _tokenService.GenerateJwt(user!, roles, studentId, fullName);
 
         return Ok(new
         {
             accessToken = newAccessToken,
-            refreshToken = newRefreshToken.Token
+            refreshToken = newRefreshToken.Token,
+            user = new
+            {
+                id = user.Id,
+                email = user.Email,
+                displayName = fullName,
+                firstName = user.FirstName,
+                lastName = user.LastName,
+                role = roles.FirstOrDefault() ?? "Student",
+                roles,
+                studentId
+            }
         });
     }
 

@@ -12,6 +12,7 @@ using TmsApi.Application.Courses.Queries;
 using Microsoft.AspNetCore.SignalR;
 using TmsApi.Application.Hubs;
 using TmsApi.Api.Hubs;
+using TmsApi.Application.Interfaces;
 
 namespace TmsApi.Api.Controllers.V2;
 
@@ -22,7 +23,8 @@ namespace TmsApi.Api.Controllers.V2;
 [Produces("application/problem+json")]
 public class EnrollmentsController(
     IMediator mediator,
-    IHubContext<TmsHub, ITmsHubClient> hubContext) : ControllerBase
+    IHubContext<TmsHub, ITmsHubClient> hubContext,
+    IEnrollmentService enrollmentService) : ControllerBase
 {
     // POST /api/v2/enrollments
     [HttpPost(Name = "EnrollStudent")]
@@ -37,26 +39,35 @@ public class EnrollmentsController(
     {
         var result = await mediator.Send(command, ct);
 
-        return result.Match<IActionResult>(
-            onSuccess: created => CreatedAtAction(
+        if (result.IsSuccess)
+        {
+            var created = result.Value;
+            var createdDto = await enrollmentService.GetDtoByIdAsync(created.EnrollmentId, ct);
+            if (createdDto != null)
+            {
+                // Broadcast real-time creation event so all open browser tabs/windows update without refresh
+                await hubContext.Clients.All.ReceiveEnrollmentAdded(createdDto);
+            }
+
+            return CreatedAtAction(
                 nameof(GetSchedule),
                 new { version = "2.0", studentId = created.StudentId },
-                created),
-            onFailure: error =>
-            {
-                var status = error.Code switch
-                {
-                    "course_not_found" => StatusCodes.Status404NotFound,
-                    "course_full" or "already_enrolled" => StatusCodes.Status409Conflict,
-                    _ => StatusCodes.Status400BadRequest
-                };
+                created);
+        }
 
-                return Problem(
-                    statusCode: status,
-                    title: "Enrollment rejected",
-                    detail: error.Message,
-                    type: $"https://tms.local/errors/{error.Code}");
-            });
+        var error = result.Error;
+        var status = error.Code switch
+        {
+            "course_not_found" => StatusCodes.Status404NotFound,
+            "course_full" or "already_enrolled" => StatusCodes.Status409Conflict,
+            _ => StatusCodes.Status400BadRequest
+        };
+
+        return Problem(
+            statusCode: status,
+            title: "Enrollment rejected",
+            detail: error.Message,
+            type: $"https://tms.local/errors/{error.Code}");
     }
 
     // GET /api/v2/enrollments/{studentId}/schedule
