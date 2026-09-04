@@ -16,14 +16,26 @@ public class TokenService
         _config = config;
     }
 
-    public string GenerateJwt(TmsUser user, IList<string> roles)
+    public string GenerateJwt(TmsUser user, IList<string> roles, int? studentId = null, string? fullName = null)
     {
+        var name = !string.IsNullOrWhiteSpace(fullName) ? fullName : $"{user.FirstName} {user.LastName}".Trim();
+        if (string.IsNullOrWhiteSpace(name)) name = user.UserName ?? user.Email ?? "User";
+
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id),
             new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
-            new Claim("FirstName", user.FirstName ?? string.Empty)
+            new Claim(ClaimTypes.Name, name),
+            new Claim("displayName", name),
+            new Claim("FirstName", user.FirstName ?? string.Empty),
+            new Claim("LastName", user.LastName ?? string.Empty)
         };
+
+        if (studentId.HasValue)
+        {
+            claims.Add(new Claim("studentId", studentId.Value.ToString()));
+            claims.Add(new Claim(ClaimTypes.Sid, studentId.Value.ToString()));
+        }
 
         foreach (var role in roles)
         {

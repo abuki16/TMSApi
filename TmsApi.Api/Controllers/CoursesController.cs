@@ -7,6 +7,10 @@ using TmsApi.Application.DTOs;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Linq;
+using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
+using TmsApi.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization; // Required for Authorize and IAuthorizationService
 
 namespace TmsApi.Api.Controllers;
@@ -30,7 +34,73 @@ public class CoursesController(
     public async Task<IActionResult> GetCourses([FromQuery] PagedRequest request, CancellationToken ct)
     {
         var result = await courseService.GetCoursesAsync(request, ct);
+
+        // If caller is an Instructor and not an Admin, only return courses assigned to this instructor
+        var isInstructor = User.IsInRole("Instructor") && !User.IsInRole("Admin");
+        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
+                     ?? User.FindFirst("id")?.Value 
+                     ?? User.FindFirst("sub")?.Value;
+
+        if (isInstructor && !string.IsNullOrEmpty(userId))
+        {
+            var filteredItems = result.Items.Where(c => c.InstructorId == userId).ToList();
+            var filteredResponse = new PagedResponse<CourseResponseDto>
+            {
+                Items = filteredItems,
+                TotalCount = filteredItems.Count,
+                Page = result.Page,
+                PageSize = result.PageSize
+            };
+            return Ok(filteredResponse);
+        }
+
         return Ok(result);
+    }
+
+    // Action 1.1: GET /api/courses/assigned (List courses assigned to current instructor)
+    [HttpGet("assigned")]
+    [Authorize(Roles = "Instructor, Admin")]
+    public async Task<IActionResult> GetAssignedCourses(CancellationToken ct, [FromServices] TmsDbContext dbContext)
+    {
+        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
+                     ?? User.FindFirst("id")?.Value 
+                     ?? User.FindFirst("sub")?.Value;
+
+        var query = dbContext.Courses.AsNoTracking();
+        if (User.IsInRole("Instructor") && !User.IsInRole("Admin") && !string.IsNullOrEmpty(userId))
+        {
+            query = query.Where(c => c.InstructorId == userId);
+        }
+
+        var courses = await query
+            .Select(c => new CourseResponseDto(
+                c.Id,
+                c.Code,
+                c.Title,
+                c.MaxCapacity,
+                c.Enrollments.Count,
+                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList(),
+                c.InstructorId
+            ))
+            .ToListAsync(ct);
+
+        return Ok(courses);
+    }
+
+    public record AssignInstructorRequest(string? InstructorId);
+
+    // Action 1.2: POST /api/courses/{id}/assign-instructor (Admin assigns instructor to course)
+    [HttpPost("{id:int}/assign-instructor")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> AssignInstructor(int id, [FromBody] AssignInstructorRequest request, [FromServices] TmsDbContext dbContext, CancellationToken ct)
+    {
+        var course = await dbContext.Courses.FindAsync([id], ct);
+        if (course is null) return NotFound(new { message = "Course not found." });
+
+        course.InstructorId = string.IsNullOrWhiteSpace(request.InstructorId) ? null : request.InstructorId.Trim();
+        await dbContext.SaveChangesAsync(ct);
+
+        return Ok(new { success = true, courseId = id, instructorId = course.InstructorId });
     }
 
     // Action 2: GET /api/courses/{id}
@@ -67,10 +137,25 @@ public class CoursesController(
             Title = course.Title,
             MaxCapacity = course.MaxCapacity,
             EnrollmentCount = course.EnrollmentCount,
+            InstructorId = course.InstructorId,
             Links = links
         };
 
         return Ok(detailDto);
+    }
+
+    // Action 2.1: GET /api/courses/{id}/enrollments
+    [HttpGet("{id:int}/enrollments", Name = "ListCourseEnrollments")]
+    [ProducesResponseType(typeof(IReadOnlyList<EnrollmentResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [EndpointSummary("List enrollments for a course")]
+    public async Task<IActionResult> GetCourseEnrollments(int id, [FromServices] IEnrollmentService enrollmentService, CancellationToken ct)
+    {
+        var course = await courseService.GetByIdAsync(id, ct);
+        if (course is null) return NotFound();
+
+        var enrollments = await enrollmentService.GetByCourseAsync(id, ct);
+        return Ok(enrollments);
     }
 
     // Action 3: POST /api/courses

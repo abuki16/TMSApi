@@ -15,9 +15,28 @@ public class AssessmentService(TmsDbContext dbContext) : IAssessmentService
 {
     public async Task<IReadOnlyList<AssessmentResponseDto>> GetByCourseAsync(int courseId)
     {
-        return await dbContext.Assessments
-            .AsNoTracking()
+        var existing = await dbContext.Assessments
             .Where(a => a.CourseId == courseId)
+            .ToListAsync();
+
+        if (existing.Count == 0)
+        {
+            var courseExists = await dbContext.Courses.AnyAsync(c => c.Id == courseId);
+            if (courseExists)
+            {
+                var defaults = new List<Assessment>
+                {
+                    new() { CourseId = courseId, Title = "Continuous Assessment", MaxScore = 20, Weight = 0.20m },
+                    new() { CourseId = courseId, Title = "Midterm Examination", MaxScore = 30, Weight = 0.30m },
+                    new() { CourseId = courseId, Title = "Final Examination", MaxScore = 50, Weight = 0.50m }
+                };
+                await dbContext.Assessments.AddRangeAsync(defaults);
+                await dbContext.SaveChangesAsync();
+                existing = defaults;
+            }
+        }
+
+        return existing
             .Select(a => new AssessmentResponseDto(
                 a.Id,
                 a.Title,
@@ -25,7 +44,7 @@ public class AssessmentService(TmsDbContext dbContext) : IAssessmentService
                 a.Weight,
                 a.CourseId
             ))
-            .ToListAsync();
+            .ToList();
     }
 
     public async Task<Assessment> CreateAssessmentAsync(Assessment assessment)

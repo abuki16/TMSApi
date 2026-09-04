@@ -56,7 +56,7 @@ public class StudentsController(IStudentService studentService, TmsDbContext con
             {
                 Name = studentName,
                 RegistrationNumber = $"TMS-{DateTime.UtcNow.Year}-{(count + 1):D4}",
-                GPA = 3.8m,
+                GPA = 0.0m,
                 IsActive = true
             };
             context.Students.Add(student);

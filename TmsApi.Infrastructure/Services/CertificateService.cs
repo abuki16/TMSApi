@@ -23,20 +23,53 @@ public class CertificateService
 
     if (alreadyExists)
     {
-        // Return null (or throw a custom exception) to prevent duplicate certificate creation
-        return null; 
+        throw new InvalidOperationException("A certificate has already been issued to this student for this course.");
     }
 
-    // 2. Your existing validation checks (e.g., verifying if Student and Course exist)...
+    // 2. Validation checks for Student and Course existence
     var studentExists = await _context.Students.AnyAsync(s => s.Id == request.StudentId);
     var courseExists = await _context.Courses.AnyAsync(c => c.Id == request.CourseId);
     
     if (!studentExists || !courseExists)
     {
-        return null;
+        throw new KeyNotFoundException("Student or course record does not exist.");
     }
 
-    // 3. Create and save the certificate if all checks pass
+    // 3. Validation check: Student must be enrolled and finished the course with a submitted grade
+    var enrollment = await _context.Enrollments
+        .FirstOrDefaultAsync(e => e.StudentId == request.StudentId && e.CourseId == request.CourseId);
+
+    if (enrollment == null)
+    {
+        throw new InvalidOperationException("Certificate cannot be issued: The student is not enrolled in this course.");
+    }
+
+    // If the administrator provided/verified a grade, update the enrollment grade
+    if (request.Grade.HasValue && request.Grade.Value >= 0)
+    {
+        enrollment.Grade = Math.Round(request.Grade.Value, 2);
+    }
+
+    if (enrollment.Grade == null || enrollment.Grade.Value < 2.00m)
+    {
+        throw new InvalidOperationException("Certificate cannot be issued: The student has not completed this course with a passing grade (minimum 2.00 / Grade C).");
+    }
+
+    // 4. Calculate and finalize the student's official registered GPA from all completed graded courses
+    var student = await _context.Students
+        .Include(s => s.Enrollments)
+        .FirstOrDefaultAsync(s => s.Id == request.StudentId);
+
+    if (student != null)
+    {
+        var graded = student.Enrollments.Where(e => e.Grade.HasValue && e.Grade.Value > 0).ToList();
+        if (graded.Count > 0)
+        {
+            student.GPA = Math.Round(graded.Average(e => e.Grade!.Value), 2);
+        }
+    }
+
+    // 5. Create and save the certificate if all checks pass
     var certificate = new Certificate
     {
         StudentId = request.StudentId,
@@ -61,34 +94,51 @@ public class CertificateService
 
         if (cert == null) return null;
 
+        var enrollment = await _context.Enrollments
+            .FirstOrDefaultAsync(e => e.StudentId == cert.StudentId && e.CourseId == cert.CourseId);
+
         return new CertificateResponseDto(
             cert.Id,
             cert.SerialNumber,
             cert.IssuedAt,
             cert.StudentId,
-            cert.Student?.Name ?? "Unknown Student",// Adjust property name to fit your Student model
+            cert.Student?.Name ?? "Unknown Student",
             cert.CourseId,
             cert.Course?.Title ?? "Unknown Course",
-            new List<LinkDto>() // Populated contextually by the controller
+            new List<LinkDto>(),
+            cert.Student?.GPA,
+            enrollment?.Grade
         );
     }
 
     public async Task<IEnumerable<CertificateResponseDto>> GetByStudentIdAsync(int studentId)
     {
-        return await _context.Certificates
+        var certs = await _context.Certificates
             .Include(c => c.Student)
             .Include(c => c.Course)
             .Where(c => c.StudentId == studentId)
-            .Select(cert => new CertificateResponseDto(
+            .ToListAsync();
+
+        var enrollments = await _context.Enrollments
+            .Where(e => e.StudentId == studentId)
+            .ToListAsync();
+
+        return certs.Select(cert =>
+        {
+            var enroll = enrollments.FirstOrDefault(e => e.CourseId == cert.CourseId);
+            return new CertificateResponseDto(
                 cert.Id,
                 cert.SerialNumber,
                 cert.IssuedAt,
                 cert.StudentId,
-               cert.Student.Name,
+                cert.Student?.Name ?? "Unknown Student",
                 cert.CourseId,
-                cert.Course.Title
-            ))
-            .ToListAsync();
+                cert.Course?.Title ?? "Unknown Course",
+                null,
+                cert.Student?.GPA,
+                enroll?.Grade
+            );
+        }).ToList();
     }
 
     public async Task<bool> RevokeCertificateAsync(int id)

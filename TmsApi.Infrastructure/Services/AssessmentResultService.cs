@@ -45,11 +45,11 @@ public class AssessmentResultService(TmsDbContext dbContext) : IAssessmentResult
                 $"Assessment definition with ID {result.AssessmentId} does not exist.");
         }
 
-        // Ensure the score does not exceed the assessment's maximum score
-        if (result.ScoreObtained > parentAssessment.MaxScore)
+        // Ensure the score is within valid bounds [0, MaxScore]
+        if (result.ScoreObtained < 0 || result.ScoreObtained > parentAssessment.MaxScore)
         {
             throw new ArgumentException(
-                $"Score obtained ({result.ScoreObtained}) cannot exceed the maximum assessment ceiling of {parentAssessment.MaxScore}.");
+                $"Invalid score: {result.ScoreObtained}. For {parentAssessment.Title}, score must be between 0 and {parentAssessment.MaxScore}.");
         }
 
         // Verify the student exists
@@ -62,26 +62,43 @@ public class AssessmentResultService(TmsDbContext dbContext) : IAssessmentResult
                 $"Student with ID {result.StudentId} does not exist.");
         }
 
-        // Verify the student is enrolled in the course
-        var isEnrolled = await dbContext.Enrollments.AnyAsync(e =>
+        // Verify the student is enrolled in the course; if not, automatically enroll as Approved
+        var enrollment = await dbContext.Enrollments.FirstOrDefaultAsync(e =>
             e.StudentId == result.StudentId &&
             e.CourseId == parentAssessment.CourseId);
 
-        if (!isEnrolled)
+        if (enrollment == null)
         {
-            throw new InvalidOperationException(
-                $"Student with ID {result.StudentId} is not enrolled in course ID {parentAssessment.CourseId}.");
+            enrollment = new Enrollment
+            {
+                StudentId = result.StudentId,
+                CourseId = parentAssessment.CourseId,
+                Status = "Approved",
+                EnrolledAt = DateTime.UtcNow
+            };
+            await dbContext.Enrollments.AddAsync(enrollment);
+            await dbContext.SaveChangesAsync();
         }
 
-        // Prevent duplicate results
-        var alreadyGraded = await dbContext.AssessmentResults.AnyAsync(ar =>
+        var gradePoint = parentAssessment.MaxScore > 0
+            ? Math.Round((result.ScoreObtained / parentAssessment.MaxScore) * 4.0m, 2)
+            : 3.5m;
+
+        // If student already has a result for this assessment, update it
+        var existingResult = await dbContext.AssessmentResults.FirstOrDefaultAsync(ar =>
             ar.AssessmentId == result.AssessmentId &&
             ar.StudentId == result.StudentId);
 
-        if (alreadyGraded)
+        if (existingResult != null)
         {
-            throw new InvalidOperationException(
-                $"Student ID {result.StudentId} has already been graded for this assessment.");
+            existingResult.ScoreObtained = result.ScoreObtained;
+            existingResult.Title = result.Title;
+            existingResult.Weight = result.Weight;
+
+            await dbContext.SaveChangesAsync();
+            await UpdateEnrollmentGradeFromAssessmentsAsync(result.StudentId, parentAssessment.CourseId);
+            await dbContext.SaveChangesAsync();
+            return existingResult;
         }
 
         // Prevent EF Core from inserting related entities again
@@ -91,7 +108,34 @@ public class AssessmentResultService(TmsDbContext dbContext) : IAssessmentResult
         await dbContext.AssessmentResults.AddAsync(result);
         await dbContext.SaveChangesAsync();
 
+        await UpdateEnrollmentGradeFromAssessmentsAsync(result.StudentId, parentAssessment.CourseId);
+        await dbContext.SaveChangesAsync();
+
         return result;
+    }
+
+    private async Task UpdateEnrollmentGradeFromAssessmentsAsync(int studentId, int courseId)
+    {
+        var enrollment = await dbContext.Enrollments.FirstOrDefaultAsync(e =>
+            e.StudentId == studentId && e.CourseId == courseId);
+
+        if (enrollment == null) return;
+
+        var courseAssessmentIds = await dbContext.Assessments
+            .Where(a => a.CourseId == courseId)
+            .Select(a => a.Id)
+            .ToListAsync();
+
+        var studentResults = await dbContext.AssessmentResults
+            .Where(ar => ar.StudentId == studentId && courseAssessmentIds.Contains(ar.AssessmentId))
+            .ToListAsync();
+
+        if (studentResults.Count > 0)
+        {
+            var totalObtainedScore = studentResults.Sum(r => r.ScoreObtained);
+            // Grade point calculated from institutional grading scale (>=85: 4.00, 80: 3.75, 75: 3.50, 70: 3.00, 60: 2.75, 55: 2.50, 50: 2.00, <50: 0.00)
+            enrollment.Grade = TmsApi.Application.Grading.GradingService.ToInstitutionalGradePoint(totalObtainedScore);
+        }
     }
 
     public async Task<AssessmentResult?> UpdateScoreAsync(int id, decimal newScore)
@@ -103,14 +147,16 @@ public class AssessmentResultService(TmsDbContext dbContext) : IAssessmentResult
         if (result is null)
             return null;
 
-        if (newScore > result.Assessment.MaxScore)
+        if (newScore < 0 || newScore > result.Assessment.MaxScore)
         {
             throw new ArgumentException(
-                $"Score obtained ({newScore}) cannot exceed the maximum assessment ceiling of {result.Assessment.MaxScore}.");
+                $"Invalid score: {newScore}. For {result.Assessment.Title}, score must be between 0 and {result.Assessment.MaxScore}.");
         }
 
         result.ScoreObtained = newScore;
+        await dbContext.SaveChangesAsync();
 
+        await UpdateEnrollmentGradeFromAssessmentsAsync(result.StudentId, result.Assessment.CourseId);
         await dbContext.SaveChangesAsync();
 
         return result;
@@ -118,13 +164,23 @@ public class AssessmentResultService(TmsDbContext dbContext) : IAssessmentResult
 
     public async Task DeleteResultAsync(int id)
     {
-        var result = await dbContext.AssessmentResults.FindAsync(id);
+        var result = await dbContext.AssessmentResults
+            .Include(ar => ar.Assessment)
+            .FirstOrDefaultAsync(ar => ar.Id == id);
 
         if (result is null)
             return;
 
-        dbContext.AssessmentResults.Remove(result);
+        var studentId = result.StudentId;
+        var courseId = result.Assessment?.CourseId ?? 0;
 
+        dbContext.AssessmentResults.Remove(result);
         await dbContext.SaveChangesAsync();
+
+        if (courseId > 0)
+        {
+            await UpdateEnrollmentGradeFromAssessmentsAsync(studentId, courseId);
+            await dbContext.SaveChangesAsync();
+        }
     }
 }

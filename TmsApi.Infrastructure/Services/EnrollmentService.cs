@@ -29,6 +29,22 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
                 new CourseScheduleInfoDto(e.Course.Code, e.Course.Title, e.Course.Title)))
             .FirstOrDefaultAsync(ct);
 
+    public Task<EnrollmentResponseDto?> GetDtoByIdAsync(int id, CancellationToken ct) =>
+        context.Enrollments
+            .AsNoTracking()
+            .Where(e => e.Id == id)
+            .Select(e => new EnrollmentResponseDto(
+                e.Id, 
+                e.StudentId, 
+                e.Student.Name,
+                e.CourseId, 
+                e.Course.Title,
+                e.Status,
+                e.EnrolledAt,
+                new CourseScheduleInfoDto(e.Course.Code, e.Course.Title, e.Course.Title),
+                e.Grade))
+            .FirstOrDefaultAsync(ct);
+
     public async Task<IReadOnlyList<EnrollmentResponseDto>> GetByCourseAsync(int courseId, CancellationToken ct)
     {
         return await context.Enrollments
@@ -42,7 +58,8 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
                 e.Course.Title,
                 e.Status,
                 e.EnrolledAt,
-                new CourseScheduleInfoDto(e.Course.Code, e.Course.Title, e.Course.Title)))
+                new CourseScheduleInfoDto(e.Course.Code, e.Course.Title, e.Course.Title),
+                e.Grade))
             .ToListAsync(ct);
     }
 
@@ -58,7 +75,8 @@ public class EnrollmentService(TmsDbContext context, ILogger<EnrollmentService> 
                 e.Course.Title,
                 e.Status,
                 e.EnrolledAt,
-                new CourseScheduleInfoDto(e.Course.Code, e.Course.Title, e.Course.Title)))
+                new CourseScheduleInfoDto(e.Course.Code, e.Course.Title, e.Course.Title),
+                e.Grade))
             .ToListAsync(ct);
     }
 

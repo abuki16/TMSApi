@@ -39,7 +39,8 @@ public class AuthController : ControllerBase
         string Password,
         string FirstName,
         string LastName,
-        string Role);
+        string Role,
+        int? AssignedCourseId = null);
 
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
@@ -72,6 +73,16 @@ public class AuthController : ControllerBase
 
         await _userManager.AddToRoleAsync(user, request.Role);
 
+        if (request.Role == "Instructor" && request.AssignedCourseId.HasValue)
+        {
+            var course = await _context.Courses.FindAsync(request.AssignedCourseId.Value);
+            if (course != null)
+            {
+                course.InstructorId = user.Id;
+                await _context.SaveChangesAsync();
+            }
+        }
+
         if (request.Role == "Student")
         {
             var studentName = $"{request.FirstName} {request.LastName}".Trim();
@@ -85,7 +96,7 @@ public class AuthController : ControllerBase
                 {
                     Name = studentName,
                     RegistrationNumber = $"TMS-{DateTime.UtcNow.Year}-{(count + 1):D4}",
-                    GPA = 3.5m,
+                    GPA = 0.0m,
                     IsActive = true
                 };
                 _context.Students.Add(newStudent);
@@ -129,7 +140,12 @@ public class AuthController : ControllerBase
         int? studentId = null;
         if (roles.Contains("Student"))
         {
-            var student = await _context.Students.FirstOrDefaultAsync(s => s.Name.ToLower() == fullName.ToLower());
+            var student = await _context.Students.IgnoreQueryFilters().FirstOrDefaultAsync(s => s.Name.ToLower() == fullName.ToLower());
+            if (student != null && (student.IsDeleted || !student.IsActive))
+            {
+                return Unauthorized(new { detail = "Student account has been deactivated or deleted." });
+            }
+
             if (student == null)
             {
                 var count = await _context.Students.IgnoreQueryFilters().CountAsync();
@@ -264,18 +280,31 @@ public class AuthController : ControllerBase
     [HttpGet("users")]
     public async Task<IActionResult> GetAllUsers()
     {
-        var users = await _userManager.Users
-            .Select(u => new
+        var users = await _userManager.Users.ToListAsync();
+        var courses = await _context.Courses.AsNoTracking().ToListAsync();
+
+        var result = new List<object>();
+        foreach (var u in users)
+        {
+            var roles = await _userManager.GetRolesAsync(u);
+            var role = roles.FirstOrDefault() ?? "Student";
+            var assignedCourse = courses.FirstOrDefault(c => c.InstructorId == u.Id);
+
+            result.Add(new
             {
                 u.Id,
                 u.Email,
                 u.FirstName,
                 u.LastName,
-                u.UserName
-            })
-            .ToListAsync();
+                u.UserName,
+                role,
+                roles,
+                assignedCourseId = assignedCourse?.Id,
+                assignedCourseTitle = assignedCourse != null ? $"{assignedCourse.Code} - {assignedCourse.Title}" : null
+            });
+        }
 
-        return Ok(users);
+        return Ok(result);
     }
 
     public record UpdateUserRequest(string Email, string FirstName, string LastName, string UserName);
@@ -311,6 +340,18 @@ public class AuthController : ControllerBase
         if (user == null)
         {
             return NotFound(new { message = "User not found." });
+        }
+
+        var fullName = $"{user.FirstName} {user.LastName}".Trim();
+        if (!string.IsNullOrWhiteSpace(fullName))
+        {
+            var student = await _context.Students.FirstOrDefaultAsync(s => s.Name.ToLower() == fullName.ToLower());
+            if (student != null)
+            {
+                student.IsDeleted = true;
+                student.IsActive = false;
+                await _context.SaveChangesAsync();
+            }
         }
 
         var result = await _userManager.DeleteAsync(user);

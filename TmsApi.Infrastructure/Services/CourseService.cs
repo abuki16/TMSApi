@@ -24,7 +24,8 @@ public class CourseService(TmsDbContext context, ILogger<CourseService> logger) 
                 c.Title, 
                 c.MaxCapacity, 
                 c.Enrollments.Count,
-                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList()
+                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList(),
+                c.InstructorId
             )) 
             .FirstOrDefaultAsync(ct);
 
@@ -38,7 +39,8 @@ public class CourseService(TmsDbContext context, ILogger<CourseService> logger) 
                 c.Title, 
                 c.MaxCapacity, 
                 c.Enrollments.Count,
-                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList()
+                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList(),
+                c.InstructorId
             )) 
             .FirstOrDefaultAsync(ct);
 
@@ -51,7 +53,8 @@ public class CourseService(TmsDbContext context, ILogger<CourseService> logger) 
                 c.Title,
                 c.MaxCapacity,
                 c.Enrollments.Count,
-                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList()
+                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList(),
+                c.InstructorId
             ))
             .ToListAsync(ct);
 
@@ -111,7 +114,8 @@ public class CourseService(TmsDbContext context, ILogger<CourseService> logger) 
                 c.Title,
                 c.MaxCapacity,
                 c.Enrollments.Count,
-                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList()
+                c.Enrollments.Select(e => new EnrollmentItemDto(e.Id, e.StudentId)).ToList(),
+                c.InstructorId
             ))
             .ToListAsync(ct);
 

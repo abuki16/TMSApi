@@ -10,7 +10,8 @@ public record EnrollmentResponseDto(
     string CourseName,
     string Status,
     DateTime EnrolledAt,
-    CourseScheduleInfoDto Course
+    CourseScheduleInfoDto Course,
+    decimal? Grade = null
 );
 
 public record CourseScheduleInfoDto(

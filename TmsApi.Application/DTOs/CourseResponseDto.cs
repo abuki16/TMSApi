@@ -9,7 +9,8 @@ public record CourseResponseDto(
     int MaxCapacity,
     int EnrollmentCount,
     // a collection here so .Enrollments.Count evaluates naturally
-    IReadOnlyCollection<EnrollmentItemDto> Enrollments
+    IReadOnlyCollection<EnrollmentItemDto> Enrollments,
+    string? InstructorId = null
 );
 
 // A simple nested DTO representing individual enrollment instances inside a course view
