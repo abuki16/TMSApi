@@ -63,9 +63,24 @@ public class StudentsController(IStudentService studentService, TmsDbContext con
             await context.SaveChangesAsync(ct);
         }
 
-        // Calculate progress: each non-rejected enrolled course contributes 3 credits to baseline 45
-        var activeEnrollments = student.Enrollments.Where(e => e.Status != "Rejected").ToList();
-        var earnedCredits = 45 + (activeEnrollments.Count * 3);
+        // A student only earns credits and GPA from completed courses where a passing grade (>= 2.00) has been submitted
+        var completedEnrollments = student.Enrollments
+            .Where(e => e.Grade.HasValue && e.Grade.Value >= 2.0m)
+            .ToList();
+
+        // Calculate dynamic cumulative GPA strictly from completed courses with submitted grades
+        decimal calculatedGpa = completedEnrollments.Count > 0
+            ? Math.Round(completedEnrollments.Average(e => e.Grade!.Value), 2)
+            : 0.0m;
+
+        // Sync with student record in DB
+        if (student.GPA != calculatedGpa)
+        {
+            student.GPA = calculatedGpa;
+            await context.SaveChangesAsync(ct);
+        }
+
+        var earnedCredits = completedEnrollments.Count * 3;
         var isGraduationEligible = earnedCredits >= 120;
 
         // Fetch any academic certificates issued to this student
@@ -88,7 +103,7 @@ public class StudentsController(IStudentService studentService, TmsDbContext con
             id = student.Id,
             name = student.Name,
             registrationNumber = student.RegistrationNumber,
-            gpa = student.GPA,
+            gpa = calculatedGpa,
             earnedCredits = earnedCredits,
             graduationStatus = isGraduationEligible ? "Eligible for Graduation" : "In Progress",
             isGraduationEligible = isGraduationEligible,
