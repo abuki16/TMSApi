@@ -41,12 +41,25 @@ public class CertificateService
 
     if (enrollment == null)
     {
-        throw new InvalidOperationException("Certificate cannot be issued: The student is not enrolled in this course.");
+        throw new InvalidOperationException(
+            "Certificate cannot be issued: The student is not enrolled in this course.");
+    }
+
+    if (!string.Equals(enrollment.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException(
+            "Certificate cannot be issued: The student's enrollment has not been approved by an administrator.");
     }
 
     // If the administrator provided/verified a grade, update the enrollment grade
-    if (request.Grade.HasValue && request.Grade.Value >= 0)
+    if (request.Grade.HasValue)
     {
+        if (request.Grade.Value < 0.0m || request.Grade.Value > 4.0m)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(request.Grade),
+                "Grade must be between 0.00 and 4.00.");
+        }
         enrollment.Grade = Math.Round(request.Grade.Value, 2);
     }
 

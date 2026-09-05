@@ -62,22 +62,15 @@ public class AssessmentResultService(TmsDbContext dbContext) : IAssessmentResult
                 $"Student with ID {result.StudentId} does not exist.");
         }
 
-        // Verify the student is enrolled in the course; if not, automatically enroll as Approved
+        // Verify the student is enrolled in the course and the enrollment has been approved by an administrator
         var enrollment = await dbContext.Enrollments.FirstOrDefaultAsync(e =>
             e.StudentId == result.StudentId &&
             e.CourseId == parentAssessment.CourseId);
 
-        if (enrollment == null)
+        if (enrollment == null || !string.Equals(enrollment.Status, "Approved", StringComparison.OrdinalIgnoreCase))
         {
-            enrollment = new Enrollment
-            {
-                StudentId = result.StudentId,
-                CourseId = parentAssessment.CourseId,
-                Status = "Approved",
-                EnrolledAt = DateTime.UtcNow
-            };
-            await dbContext.Enrollments.AddAsync(enrollment);
-            await dbContext.SaveChangesAsync();
+            throw new InvalidOperationException(
+                "Cannot submit grade: The student's enrollment in this course has not been approved by an administrator.");
         }
 
         var gradePoint = parentAssessment.MaxScore > 0
@@ -146,6 +139,16 @@ public class AssessmentResultService(TmsDbContext dbContext) : IAssessmentResult
 
         if (result is null)
             return null;
+
+        var enrollment = await dbContext.Enrollments.FirstOrDefaultAsync(e =>
+            e.StudentId == result.StudentId &&
+            e.CourseId == result.Assessment.CourseId);
+
+        if (enrollment == null || !string.Equals(enrollment.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Cannot update score: The student's enrollment in this course has not been approved by an administrator.");
+        }
 
         if (newScore < 0 || newScore > result.Assessment.MaxScore)
         {
